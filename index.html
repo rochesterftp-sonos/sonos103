@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Party Jukebox for Sonos · Spotify Connect</title>
+  <style>
+    :root {
+      --bg: #0b0f12;
+      --panel: #131a20;
+      --accent: #1db954; /* Spotify green */
+      --accent-2: #2e7f7e; /* Roc IT Consulting teal, nice secondary */
+      --text: #e7eef6;
+      --muted: #9fb1c1;
+      --danger: #ff6b6b;
+      --ok: #7bd88f;
+      --warn: #ffd166;
+      --radius: 16px;
+      --shadow: 0 6px 24px rgba(0,0,0,.25);
+    }
+    html, body { height: 100%; }
+    body { margin: 0; background: radial-gradient(1200px 900px at 20% -10%, #101820 10%, var(--bg) 60%); color: var(--text); font: 16px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji"; }
+    .wrap { max-width: 1100px; margin: 24px auto 64px; padding: 0 16px; }
+    header { display:flex; align-items:center; justify-content:space-between; gap: 12px; margin-bottom: 16px; }
+    h1 { font-size: clamp(22px, 3.6vw, 36px); margin: 0; letter-spacing: .2px; }
+    .sub { color: var(--muted); font-size: 14px; }
+    .panel { background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0) 60%), var(--panel); border: 1px solid rgba(255,255,255,.06); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .grid { display:grid; grid-template-columns: 1.05fr .95fr; gap: 18px; }
+    @media (max-width: 920px){ .grid { grid-template-columns: 1fr; } }
+    .section { padding: 14px 14px 10px; }
+    .controls { display:flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    input[type="text"], select { background: #0e141a; border: 1px solid rgba(255,255,255,.1); color: var(--text); border-radius: 12px; padding: 10px 12px; outline: none; min-width: 160px; }
+    input[type="search"]{ width: min(650px, 100%); }
+    button { background: var(--accent); color: #04170a; border: none; padding: 10px 14px; border-radius: 12px; font-weight: 700; letter-spacing: .2px; cursor: pointer; box-shadow: 0 4px 16px rgba(29,185,84,.28); transition: transform .06s ease, filter .2s ease; }
+    button:hover { filter: brightness(1.04); }
+    button:active { transform: translateY(1px); }
+    button.secondary { background: #182028; color: var(--text); box-shadow: none; border: 1px solid rgba(255,255,255,.08); }
+    button.warn { background: var(--warn); color: #241b00; }
+    button.mini { padding: 7px 10px; font-size: 13px; font-weight: 600; }
+    .badge { font-size: 12px; padding: 3px 8px; border-radius: 999px; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.08); color: var(--muted); }
+    .row { display:flex; align-items:center; gap: 10px; }
+    .list { margin: 8px 0 0; max-height: 64vh; overflow: auto; padding: 6px; }
+    .tile { display:grid; grid-template-columns: 62px 1fr auto; gap: 12px; align-items:center; padding: 9px; border-radius: 12px; border:1px solid rgba(255,255,255,.06); background: rgba(255,255,255,.02); margin-bottom: 8px; }
+    .tile img { width: 62px; height: 62px; border-radius: 10px; object-fit: cover; background:#0b0f12; }
+    .title { font-weight: 700; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .footer { display:flex; justify-content: space-between; align-items:center; margin-top: 8px; color: var(--muted); font-size: 12px; }
+    .pill { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.08); }
+    .hint { color: var(--muted); font-size: 13px; }
+    .success { color: var(--ok); }
+    .error { color: var(--danger); }
+    .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 12px; padding: 2px 6px; border-radius: 6px; background: rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.1); }
+    .divider { height:1px; background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,.08), rgba(255,255,255,0)); margin: 10px 0; }
+    .grow { flex: 1 1 auto; }
+    .right { text-align:right; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>🎉 Party Jukebox for Sonos</h1>
+        <div class="sub">Guests can search Spotify and add tracks to the current Sonos/Spotify Connect queue — no app installs.</div>
+      </div>
+      <div class="row">
+        <span class="badge" id="status-badge">Not connected</span>
+        <button class="secondary mini" id="btn-logout" title="Clear token and re‑link" style="display:none;">Log out</button>
+      </div>
+    </header>
+
+    <div class="panel section">
+      <div class="controls" style="gap:12px">
+        <div class="row" style="gap:8px; align-items:center; flex-wrap:wrap;">
+          <label class="hint">Device:</label>
+          <select id="device-select"></select>
+          <button class="secondary mini" id="btn-refresh-devices">Refresh devices</button>
+          <button class="secondary mini" id="btn-transfer">Make Active</button>
+        </div>
+        <div class="grow"></div>
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <span class="hint">Host setup:</span>
+          <button class="mini" id="btn-link">Connect Spotify</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-top:14px;">
+      <section class="panel section">
+        <div class="controls">
+          <input id="q" type="search" placeholder="Search songs, artists, albums…" autocomplete="off" />
+          <button id="btn-search">Search</button>
+        </div>
+        <div class="divider"></div>
+        <div id="results" class="list" aria-live="polite"></div>
+        <div class="footer"><span class="hint">Tip: put the Surface tablet in kiosk mode so guests only see this page.</span></div>
+      </section>
+
+      <section class="panel section">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <div class="row" style="gap:10px; align-items:center;">
+            <h3 style="margin:0">Queue</h3>
+            <span class="badge" id="queue-count">0</span>
+          </div>
+          <div class="row" style="gap:8px;">
+            <button class="secondary mini" id="btn-refresh-queue">Refresh</button>
+          </div>
+        </div>
+        <div class="divider"></div>
+        <div id="queue" class="list" aria-live="polite"></div>
+        <div class="footer">
+          <span class="hint">This reads your Spotify queue on the selected device. To target Sonos, select your Sonos group listed as a Spotify Connect device.</span>
+        </div>
+      </section>
+    </div>
+
+    <div class="panel section" style="margin-top:14px;">
+      <details>
+        <summary class="hint">Setup notes (host only)</summary>
+        <ol class="hint">
+          <li>Requires <strong>Spotify Premium</strong> and your Sonos speakers linked with Spotify (they show up as a Spotify Connect device when you start playback on Sonos).</li>
+          <li>Create a Spotify app at <span class="kbd">developer.spotify.com</span> → Dashboard. Add a Redirect URI, e.g. <span class="kbd">http://localhost:5500/</span> (serve this file locally).</li>
+          <li>Open this file via a tiny local server (for example VS Code "Live Server") so the URL is <span class="kbd">http://localhost:5500/</span>. Then enter your <em>Client ID</em> below and press <em>Connect Spotify</em>.</li>
+          <li>Start playback on your Sonos group from Spotify at least once so it appears as a device. Then select it here and use <em>Make Active</em> if needed.</li>
+        </ol>
+        <div class="divider"></div>
+        <div class="row" style="gap:8px; flex-wrap:wrap;">
+          <label class="hint">Spotify Client ID:</label>
+          <input id="client-id" type="text" placeholder="Paste your Spotify Client ID" style="min-width:360px;" />
+          <label class="hint">Redirect URI:</label>
+          <input id="redirect-uri" type="text" placeholder="http://localhost:5500/" style="min-width:260px;" />
+          <button class="mini" id="btn-save-config">Save</button>
+        </div>
+      </details>
+    </div>
+
+    <div class="footer" style="margin-top:16px;">
+      <div>Built for party mode • Works best on a Surface tablet in kiosk/assigned access</div>
+      <div class="right hint">Spotify + Sonos Connect • Single‑file, no backend</div>
+    </div>
+  </div>
+
+  <script>
+    // =============================
+    // Minimal Spotify PKCE + Queue Jukebox
+    // =============================
+
+    /**
+     * NOTE: This single-file app uses Spotify's PKCE flow directly in the browser.
+     * You'll need to provide a Client ID and a Redirect URI that are registered
+     * in your Spotify app settings. Serve this file from that Redirect URI.
+     *
+     * Jukebox model: guests never see your Spotify creds; this app holds a token in
+     * the Surface tablet's localStorage. Have the tablet signed in once before the party.
+     */
+
+    const els = {
+      status: document.getElementById('status-badge'),
+      btnLink: document.getElementById('btn-link'),
+      btnLogout: document.getElementById('btn-logout'),
+      clientId: document.getElementById('client-id'),
+      redirectUri: document.getElementById('redirect-uri'),
+      btnSaveCfg: document.getElementById('btn-save-config'),
+      q: document.getElementById('q'),
+      btnSearch: document.getElementById('btn-search'),
+      results: document.getElementById('results'),
+      queue: document.getElementById('queue'),
+      queueCount: document.getElementById('queue-count'),
+      deviceSelect: document.getElementById('device-select'),
+      btnRefreshDevices: document.getElementById('btn-refresh-devices'),
+      btnTransfer: document.getElementById('btn-transfer'),
+      btnRefreshQueue: document.getElementById('btn-refresh-queue'),
+    };
+
+    const storage = {
+      get token() { return JSON.parse(localStorage.getItem('sp_token')||'null'); },
+      set token(v) { localStorage.setItem('sp_token', JSON.stringify(v)); },
+      clearToken() { localStorage.removeItem('sp_token'); },
+      get cfg() {
+        const raw = JSON.parse(localStorage.getItem('sp_cfg')||'{}');
+        return { clientId: raw.clientId||'', redirectUri: raw.redirectUri||window.location.origin + '/' };
+      },
+      set cfg(v) { localStorage.setItem('sp_cfg', JSON.stringify(v)); },
+    };
+
+    function uiStatus(msg, kind=''){
+      els.status.textContent = msg;
+      els.status.className = 'badge' + (kind? ' '+kind: '');
+    }
+
+    // -----------------------------
+    // OAuth: PKCE helpers
+    // -----------------------------
+    async function sha256(buffer){
+      const enc = new TextEncoder().encode(buffer);
+      const digest = await crypto.subtle.digest('SHA-256', enc);
+      return btoa(String.fromCharCode(...new Uint8Array(digest))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+    }
+    function randStr(len){
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~';
+      let s=''; for(let i=0;i<len;i++){ s += chars.charAt(Math.floor(Math.random()*chars.length)); } return s;
+    }
+
+    async function beginAuth(){
+      const { clientId, redirectUri } = storage.cfg;
+      if(!clientId || !redirectUri){
+        alert('Please save your Spotify Client ID and Redirect URI in Setup notes.');
+        return;
+      }
+      const verifier = randStr(64);
+      const challenge = await sha256(verifier);
+      sessionStorage.setItem('sp_verifier', verifier);
+      const scope = [
+        'user-read-playback-state',
+        'user-modify-playback-state',
+        'playlist-read-private',
+        'user-read-currently-playing'
+      ].join(' ');
+      const url = new URL('https://accounts.spotify.com/authorize');
+      url.searchParams.set('client_id', clientId);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('code_challenge_method', 'S256');
+      url.searchParams.set('code_challenge', challenge);
+      url.searchParams.set('scope', scope);
+      window.location.assign(url.toString());
+    }
+
+    async function completeAuth(){
+      const qp = new URLSearchParams(window.location.search);
+      const code = qp.get('code');
+      if(!code) return false;
+      const { clientId, redirectUri } = storage.cfg;
+      const verifier = sessionStorage.getItem('sp_verifier');
+      if(!verifier) return false;
+      const body = new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        code_verifier: verifier
+      });
+      const resp = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body });
+      if(!resp.ok){ console.error('Token error', await resp.text()); uiStatus('Auth failed', 'error'); return false; }
+      const tok = await resp.json();
+      storage.token = { ...tok, obtained_at: Date.now() };
+      // Clean URL
+      history.replaceState({}, document.title, redirectUri);
+      return true;
+    }
+
+    async function refreshToken(){
+      const tok = storage.token; if(!tok?.refresh_token) return false;
+      const { clientId } = storage.cfg;
+      const body = new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'refresh_token',
+        refresh_token: tok.refresh_token
+      });
+      const resp = await fetch('https://accounts.spotify.com/api/token', { method:'POST', headers:{ 'Content-Type':'application/x-www-form-urlencoded' }, body });
+      if(!resp.ok){ storage.clearToken(); uiStatus('Session expired', 'error'); return false; }
+      const n = await resp.json();
+      storage.token = { ...tok, ...n, obtained_at: Date.now(), refresh_token: n.refresh_token || tok.refresh_token };
+      return true;
+    }
+
+    function tokenExpired(){
+      const tok = storage.token; if(!tok) return true;
+      const age = (Date.now() - (tok.obtained_at||0)) / 1000; // seconds
+      const ttl = (tok.expires_in||3600) - 30; // refresh slightly early
+      return age > ttl;
+    }
+
+    async function api(path, opts={}){
+      if(!storage.token) throw new Error('Not linked');
+      if(tokenExpired()) await refreshToken();
+      const resp = await fetch('https://api.spotify.com/v1'+path, {
+        ...opts,
+        headers: { 'Authorization': 'Bearer '+storage.token.access_token, 'Content-Type': 'application/json', ...(opts.headers||{}) }
+      });
+      if(resp.status === 401){ // try one refresh
+        await refreshToken();
+        return api(path, opts);
+      }
+      return resp;
+    }
+
+    // -----------------------------
+    // Devices
+    // -----------------------------
+    async function loadDevices(){
+      const r = await api('/me/player/devices');
+      if(!r.ok){ uiStatus('Device fetch failed', 'error'); return; }
+      const { devices } = await r.json();
+      els.deviceSelect.innerHTML = '';
+      devices.sort((a,b)=> (b.is_active?1:0) - (a.is_active?1:0));
+      for(const d of devices){
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = `${d.is_active?'▶︎ ':''}${d.name} • ${d.type}${d.is_restricted?' (restricted)':''}`;
+        if(d.is_active) opt.selected = true;
+        els.deviceSelect.appendChild(opt);
+      }
+      if(!devices.length){
+        const opt = document.createElement('option');
+        opt.textContent = 'No devices found — start playback on Sonos then refresh';
+        opt.value = '';
+        els.deviceSelect.appendChild(opt);
+      }
+    }
+
+    async function transfer(){
+      const device_id = els.deviceSelect.value; if(!device_id) return alert('Pick a device to activate');
+      const r = await api('/me/player', { method:'PUT', body: JSON.stringify({ device_ids:[device_id], play: false })});
+      if(r.status===204){ uiStatus('Device activated', 'success'); } else { uiStatus('Could not activate', 'error'); }
+      await loadQueue();
+    }
+
+    // -----------------------------
+    // Search + Queue
+    // -----------------------------
+    function trackTile(t){
+      const art = t.album?.images?.[1]?.url || t.album?.images?.[0]?.url || '';
+      const el = document.createElement('div');
+      el.className = 'tile';
+      el.innerHTML = `
+        <img alt="cover" src="${art}" />
+        <div>
+          <div class="title">${t.name}</div>
+          <div class="meta">${(t.artists||[]).map(a=>a.name).join(', ')} • ${t.album?.name||''}</div>
+        </div>
+        <div class="row" style="gap:8px;">
+          <button class="mini" data-uri="${t.uri}">Add to Queue</button>
+        </div>`;
+      el.querySelector('button').addEventListener('click', ()=> addToQueue(t.uri));
+      return el;
+    }
+
+    async function doSearch(){
+      const q = els.q.value.trim(); if(!q) return;
+      els.results.innerHTML = '<div class="hint">Searching…</div>';
+      const r = await api('/search?'+new URLSearchParams({ q, type:'track', limit: 25 }).toString());
+      if(!r.ok){ els.results.innerHTML = '<div class="error">Search failed</div>'; return; }
+      const data = await r.json();
+      els.results.innerHTML = '';
+      (data.tracks?.items||[]).forEach(t => els.results.appendChild(trackTile(t)));
+      if(!data.tracks?.items?.length){ els.results.innerHTML = '<div class="hint">No songs found.</div>'; }
+    }
+
+    async function addToQueue(uri){
+      const device_id = els.deviceSelect.value || undefined;
+      const qs = new URLSearchParams({ uri });
+      if(device_id) qs.set('device_id', device_id);
+      const r = await api('/me/player/queue?'+qs.toString(), { method:'POST' });
+      if(r.status===204){
+        uiStatus('Added to queue ✓', 'success');
+        await loadQueue();
+      } else {
+        const txt = await r.text();
+        console.error('Queue error', txt);
+        uiStatus('Could not add (is device active?)', 'error');
+      }
+    }
+
+    async function loadQueue(){
+      const r = await api('/me/player/queue');
+      if(!r.ok){ els.queue.innerHTML = '<div class="hint">Queue not available (start playback then refresh).</div>'; return; }
+      const data = await r.json();
+      const items = data.queue || [];
+      els.queueCount.textContent = items.length;
+      els.queue.innerHTML = '';
+      const now = data.currently_playing;
+      if(now){
+        const nowEl = document.createElement('div');
+        nowEl.className = 'tile';
+        nowEl.innerHTML = `
+          <img src="${now.album?.images?.[1]?.url||''}" alt="cover" />
+          <div>
+            <div class="title">Now Playing: ${now.name}</div>
+            <div class="meta">${(now.artists||[]).map(a=>a.name).join(', ')} • ${now.album?.name||''}</div>
+          </div>
+          <div class="pill">LIVE</div>`;
+        els.queue.appendChild(nowEl);
+      }
+      items.forEach(t => els.queue.appendChild(trackTile(t)));
+      if(!items.length){ els.queue.innerHTML += '<div class="hint" style="padding:6px 10px;">Queue is empty — add a few tracks!</div>'; }
+    }
+
+    // -----------------------------
+    // Boot
+    // -----------------------------
+    function updateAuthUI(){
+      const linked = !!storage.token;
+      els.btnLogout.style.display = linked ? '' : 'none';
+      els.btnLink.style.display = linked ? 'none' : '';
+      uiStatus(linked ? 'Connected to Spotify' : 'Not connected', linked ? 'success' : '');
+    }
+
+    async function boot(){
+      // read config
+      const cfg = storage.cfg; els.clientId.value = cfg.clientId; els.redirectUri.value = cfg.redirectUri;
+      if(await completeAuth()){ /* finished auth redirect */ }
+      updateAuthUI();
+      if(storage.token){
+        await loadDevices();
+        await loadQueue();
+      }
+    }
+
+    // -----------------------------
+    // Events
+    // -----------------------------
+    els.btnSaveCfg.addEventListener('click', ()=>{
+      const clientId = els.clientId.value.trim();
+      const redirectUri = els.redirectUri.value.trim() || (window.location.origin + '/');
+      storage.cfg = { clientId, redirectUri };
+      alert('Saved! Now press “Connect Spotify”.');
+    });
+    els.btnLink.addEventListener('click', beginAuth);
+    els.btnLogout.addEventListener('click', ()=>{ storage.clearToken(); updateAuthUI(); });
+    els.btnSearch.addEventListener('click', doSearch);
+    els.q.addEventListener('keydown', e=>{ if(e.key==='Enter') doSearch(); });
+    els.btnRefreshDevices.addEventListener('click', loadDevices);
+    els.btnTransfer.addEventListener('click', transfer);
+    els.btnRefreshQueue.addEventListener('click', loadQueue);
+
+    boot();
+
+  </script>
+</body>
+</html>
