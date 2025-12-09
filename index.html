@@ -6,92 +6,96 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
-      --bg: #050816;
-      --bg-alt: #111827;
+      --bg: #020617;
+      --card: #02081a;
+      --card-alt: #020816;
+      --border: #1f2937;
       --accent: #22c55e;
-      --accent-soft: rgba(34, 197, 94, 0.15);
+      --accent-soft: rgba(34, 197, 94, 0.2);
       --accent-text: #bbf7d0;
+      --danger: #f97373;
+      --danger-soft: rgba(248, 113, 113, 0.2);
       --text: #e5e7eb;
       --text-dim: #9ca3af;
-      --danger: #f97373;
-      --border: #1f2937;
-      --radius-lg: 18px;
-      --radius-md: 10px;
-      --shadow-soft: 0 18px 45px rgba(0,0,0,0.45);
-      --font-main: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --radius-lg: 22px;
+      --radius-md: 14px;
+      --shadow-soft: 0 18px 45px rgba(0,0,0,0.55);
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       min-height: 100vh;
+      font-family: var(--font);
       color: var(--text);
-      background: radial-gradient(circle at top left, #111827, #020617 55%);
-      font-family: var(--font-main);
+      background: radial-gradient(circle at top left, #0b1220, #020617 60%);
       display: flex;
       justify-content: center;
-      padding: 20px;
+      padding: 10px;
     }
-    .app-shell {
+    .app {
       width: 100%;
-      max-width: 1100px;
-      background: linear-gradient(145deg, rgba(15,23,42,0.96), rgba(6,17,35,0.98));
-      border-radius: 24px;
+      max-width: 1200px;
+      background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(6,8,20,0.98));
+      border-radius: 26px;
       box-shadow: var(--shadow-soft);
-      border: 1px solid rgba(148,163,184,0.2);
-      padding: 20px 22px;
+      border: 1px solid rgba(148,163,184,0.3);
+      padding: 14px 14px 18px;
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 12px;
     }
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
+      padding: 4px 4px 2px;
     }
     .title-block {
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      gap: 6px;
     }
     .title {
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       font-weight: 700;
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .pill {
-      font-size: .7rem;
-      text-transform: uppercase;
-      letter-spacing: .08em;
-      padding: 2px 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,.5);
-      color: var(--text-dim);
-    }
-    .subtitle {
+    .tagline {
       font-size: .9rem;
       color: var(--text-dim);
+    }
+    .status-area {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
     }
     .status-chip {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 6px 10px;
+      gap: 8px;
+      padding: 8px 12px;
       border-radius: 999px;
-      font-size: .8rem;
-      border: 1px solid rgba(148,163,184,0.6);
-      background: rgba(15,23,42,0.9);
+      font-size: .9rem;
+      border: 1px solid rgba(148,163,184,0.7);
+      background: rgba(15,23,42,0.95);
     }
     .status-dot {
-      width: 8px; height:8px;
+      width: 10px;
+      height: 10px;
       border-radius: 999px;
       background: var(--danger);
     }
-    .status-dot.ok { background: var(--accent); }
+    .status-dot.ok {
+      background: #22c55e;
+    }
     .status-label {
       color: var(--text-dim);
+      font-size: .85rem;
     }
     .status-value {
       font-weight: 600;
@@ -99,46 +103,50 @@
 
     .btn {
       border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.5);
-      padding: 8px 14px;
-      font-size: 0.85rem;
-      font-weight: 500;
+      border: 1px solid rgba(148,163,184,0.7);
+      padding: 10px 18px;
+      font-size: .95rem;
+      font-weight: 600;
       color: var(--text);
       background: rgba(15,23,42,0.95);
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      transition: background .15s ease, transform .05s ease, box-shadow .15s ease;
+      justify-content: center;
+      gap: 7px;
+      min-width: 120px;
+      min-height: 44px;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .12s ease, transform .06s ease, box-shadow .12s ease;
     }
-    .btn:hover {
-      background: rgba(30,64,175,0.5);
-      transform: translateY(-1px);
-      box-shadow: 0 8px 25px rgba(15,23,42,0.8);
-    }
+    .btn:hover { background: rgba(31,41,55,0.95); transform: translateY(-1px); }
     .btn:active { transform: translateY(0); box-shadow: none; }
     .btn-primary {
       background: linear-gradient(135deg, #22c55e, #16a34a);
       border-color: #22c55e;
       color: #022c22;
-      box-shadow: 0 10px 30px rgba(22,163,74,0.5);
+      box-shadow: 0 8px 24px rgba(34,197,94,0.5);
     }
     .btn-primary:hover {
       background: linear-gradient(135deg, #4ade80, #22c55e);
     }
     .btn-ghost {
       background: transparent;
+      border-color: rgba(148,163,184,0.5);
     }
 
     .layout {
       display: flex;
       flex-direction: column;
-      gap: 14px;
+      gap: 10px;
+      margin-top: 4px;
     }
     @media (min-width: 900px) {
       .layout {
         flex-direction: row;
-        align-items: flex-start;
+        gap: 10px;
+        align-items: stretch;
       }
       .col {
         flex: 1;
@@ -146,10 +154,10 @@
     }
 
     .panel {
-      background: radial-gradient(circle at top left, rgba(30,64,175,0.15), rgba(15,23,42,0.96));
+      background: radial-gradient(circle at top left, rgba(30,64,175,0.18), rgba(6,10,25,0.98));
       border-radius: var(--radius-lg);
-      border: 1px solid rgba(148,163,184,0.35);
-      padding: 14px 14px 10px;
+      border: 1px solid rgba(30,64,175,0.5);
+      padding: 12px 12px 10px;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -157,24 +165,18 @@
     }
     .panel-header {
       display: flex;
-      align-items: baseline;
+      align-items: center;
       justify-content: space-between;
-      gap: 8px;
+      gap: 12px;
     }
     .panel-title {
-      font-size: 0.95rem;
+      font-size: 1.05rem;
       font-weight: 600;
     }
     .panel-subtitle {
-      font-size: 0.8rem;
+      font-size: .85rem;
       color: var(--text-dim);
-    }
-    .panel-body {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+      margin-top: 2px;
     }
 
     .search-bar {
@@ -185,133 +187,139 @@
     .input-row {
       display: flex;
       gap: 8px;
-      align-items: center;
+      align-items: stretch;
     }
     .input {
       flex: 1;
       border-radius: 999px;
       border: 1px solid rgba(31,41,55,0.9);
-      background: rgba(15,23,42,0.9);
-      padding: 8px 12px;
+      background: rgba(6,8,20,0.98);
+      padding: 11px 15px;
       color: var(--text);
-      font-size: 0.9rem;
+      font-size: 1rem;
       outline: none;
+      min-height: 44px;
     }
-    .input::placeholder {
-      color: #6b7280;
-    }
-    .note-input {
-      border-radius: 999px;
-      border: 1px dashed rgba(148,163,184,0.7);
-      background: rgba(15,23,42,0.6);
-      padding: 6px 10px;
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      outline: none;
-    }
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 0.75rem;
-      padding: 3px 9px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      color: var(--text-dim);
-    }
+    .input::placeholder { color: #6b7280; }
 
     .tracks-list {
       border-radius: var(--radius-md);
-      border: 1px solid rgba(31,41,55,0.9);
-      background: radial-gradient(circle at top, rgba(15,23,42,0.9), rgba(6,8,16,0.98));
+      border: 1px solid rgba(31,41,55,0.95);
+      background: radial-gradient(circle at top, rgba(15,23,42,0.96), #020617);
       padding: 4px;
-      max-height: 380px;
-      overflow: auto;
+      max-height: 430px;
+      overflow-y: auto;
+      margin-top: 4px;
     }
+
     .track-row {
       display: flex;
       align-items: center;
       gap: 8px;
-      padding: 6px 6px;
-      border-radius: 9px;
+      padding: 8px 8px;
+      border-radius: 13px;
       cursor: pointer;
-      transition: background .12s ease, transform .05s ease;
+      transition: background .08s ease, transform .04s ease;
+      min-height: 52px;
     }
     .track-row:hover {
-      background: rgba(31,41,55,0.85);
+      background: rgba(31,41,55,0.95);
       transform: translateY(-1px);
     }
-    .track-meta {
+    .track-main {
       flex: 1;
       min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
     .track-title {
-      font-size: 0.9rem;
+      font-size: .98rem;
+      font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .track-sub {
-      font-size: 0.8rem;
+      font-size: .8rem;
       color: var(--text-dim);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .track-note {
-      font-size: 0.75rem;
-      color: var(--accent-text);
-      margin-top: 2px;
+    .track-right {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: flex-end;
+      justify-content: center;
     }
     .pill-small {
-      font-size: 0.7rem;
-      padding: 2px 6px;
+      font-size: .78rem;
+      padding: 4px 8px;
       border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.5);
+      border: 1px solid rgba(148,163,184,0.6);
       color: var(--text-dim);
     }
-    .timestamp {
-      font-size: 0.7rem;
-      color: #64748b;
-    }
-    .msg {
-      font-size: 0.8rem;
-      color: var(--text-dim);
-      padding: 4px 2px;
-    }
-    .msg.error {
-      color: var(--danger);
-    }
-    .msg.success {
-      color: var(--accent-text);
-    }
-    .chip-row {
-      display: flex;
+
+    .btn-icon {
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      padding: 8px 14px;
+      min-width: 70px;
+      min-height: 40px;
+      font-size: .86rem;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
       gap: 6px;
-      flex-wrap: wrap;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .08s ease, transform .04s ease, box-shadow .08s ease;
     }
+    .btn-add {
+      background: var(--accent-soft);
+      color: var(--accent-text);
+      box-shadow: 0 0 0 1px rgba(34,197,94,0.3);
+    }
+    .btn-add:hover { background: rgba(34,197,94,0.3); transform: translateY(-1px); }
+    .btn-remove {
+      background: var(--danger-soft);
+      color: #fecaca;
+      box-shadow: 0 0 0 1px rgba(248,113,113,0.3);
+    }
+    .btn-remove:hover { background: rgba(248,113,113,0.35); transform: translateY(-1px); }
+
+    .msg {
+      font-size: .82rem;
+      color: var(--text-dim);
+      margin-top: 4px;
+      min-height: 18px;
+    }
+    .msg.error { color: var(--danger); }
+    .msg.success { color: var(--accent-text); }
   </style>
 </head>
 <body>
-<div class="app-shell">
+<div class="app">
   <header>
     <div class="title-block">
       <div class="title">
         🎧 House Party Jukebox
-        <span class="pill">Guests can add songs – host controls Sonos</span>
       </div>
-      <div class="subtitle">
-        Scan this page on the Surface, log in to Spotify once, and let everyone search &
-        add tracks to the shared playlist.
+      <div class="tagline">
+        Guests search & add songs. You pick Sonos as the output from the Spotify app.
       </div>
     </div>
-    <div style="display:flex; flex-direction:column; gap:8px; align-items:flex-end;">
+    <div class="status-area">
       <div class="status-chip" id="authStatusChip">
         <span class="status-dot" id="authStatusDot"></span>
         <span class="status-label">Spotify</span>
         <span class="status-value" id="authStatusText">Not connected</span>
       </div>
-      <div style="display:flex; gap:6px;">
+      <div style="display:flex; gap:8px;">
         <button class="btn btn-ghost" id="logoutBtn" style="display:none;">Log out</button>
         <button class="btn btn-primary" id="loginBtn">Connect Spotify</button>
       </div>
@@ -319,106 +327,61 @@
   </header>
 
   <div class="layout">
-    <!-- LEFT: Search & add -->
+    <!-- LEFT: Search and add -->
     <div class="col">
       <section class="panel">
         <div class="panel-header">
           <div>
-            <div class="panel-title">Search & add tracks</div>
-            <div class="panel-subtitle">
-              Type a song, artist, or album. Tap a result to add it to the Party playlist.
-            </div>
-          </div>
-          <div class="badge">
-            🔊 Output:
-            <span style="font-weight:600;">Use Spotify app to play playlist on Sonos</span>
+            <div class="panel-title">Search music</div>
+            <div class="panel-subtitle">Type a song, artist, or album. Tap ➕ to add.</div>
           </div>
         </div>
-        <div class="panel-body">
-          <div class="search-bar">
-            <div class="input-row">
-              <input id="searchInput" class="input" type="text" placeholder="Search Spotify…" />
-              <button class="btn" id="searchBtn">Search</button>
-            </div>
-            <input
-              id="guestNoteInput"
-              class="note-input"
-              type="text"
-              placeholder="Optional: Your name or note (e.g., 'Dave – banger for later')"
-            />
+        <div class="search-bar">
+          <div class="input-row">
+            <input id="searchInput" class="input" type="text" placeholder="Search Spotify…" />
+            <button class="btn" id="searchBtn">Search</button>
           </div>
-          <div class="tracks-list" id="searchResults"></div>
-          <div class="msg" id="searchMessage"></div>
         </div>
+        <div class="tracks-list" id="searchResults"></div>
+        <div class="msg" id="searchMessage"></div>
       </section>
     </div>
 
-    <!-- RIGHT: Current Party playlist -->
+    <!-- RIGHT: Current party playlist -->
     <div class="col">
       <section class="panel">
         <div class="panel-header">
           <div>
-            <div class="panel-title">Party Queue playlist</div>
-            <div class="panel-subtitle">
-              Tracks currently in the shared Spotify playlist. Set this playlist playing to Sonos.
-            </div>
+            <div class="panel-title">Party playlist</div>
+            <div class="panel-subtitle">These tracks are in the shared queue.</div>
           </div>
-          <div class="chip-row">
-            <button class="btn btn-ghost" id="refreshPlaylistBtn">Refresh</button>
-          </div>
+          <button class="btn btn-ghost" id="refreshPlaylistBtn">Refresh</button>
         </div>
-        <div class="panel-body">
-          <div class="tracks-list" id="playlistView"></div>
-          <div class="msg" id="playlistMessage"></div>
-          <div class="msg" style="margin-top:4px;">
-            💡 In the Spotify app, open this playlist and choose your Sonos speakers as the output
-            device. New tracks added here will show up there automatically.
-          </div>
-        </div>
+        <div class="tracks-list" id="playlistView"></div>
+        <div class="msg" id="playlistMessage"></div>
       </section>
     </div>
   </div>
-
-  <section class="panel" style="margin-top:4px;">
-    <div class="panel-header">
-      <div>
-        <div class="panel-title">Host setup notes</div>
-        <div class="panel-subtitle">
-          Visible only to you. This explains how to wire it to Sonos & Spotify.
-        </div>
-      </div>
-    </div>
-    <div class="panel-body">
-      <ul class="msg" style="margin:0 0 6px 18px;">
-        <li>Create a Spotify playlist called something like <b>House Party Jukebox</b>.</li>
-        <li>Copy its link, extract the playlist ID, and set it in the config at the top of this file.</li>
-        <li>Make sure this page’s URL is added as a redirect URI in the Spotify Developer Dashboard.</li>
-        <li>From the Spotify app, play that playlist and select your Sonos group as the output device.</li>
-      </ul>
-      <div class="chip-row">
-        <span class="badge">Guests only touch this page. You keep control of Sonos output.</span>
-      </div>
-    </div>
-  </section>
 </div>
 
 <script>
   /**************************************************************
-   * CONFIG – customize these three values
+   * CONFIG
    **************************************************************/
   const SPOTIFY_CLIENT_ID = "b48fe08bcf6c448aabe8774fbfdcd943";
-  const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; // must match Spotify app setting
-  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // e.g. 37i9dQZF1DX4dyzvuaRJ0n
+  const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; // must match Spotify app
+  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // your party playlist
 
-  // Scopes for playlist read/write
   const SPOTIFY_SCOPES = [
     "playlist-read-private",
     "playlist-modify-private",
     "playlist-modify-public"
   ];
 
+  let lastSnapshotId = null;
+
   /**************************************************************
-   * PKCE + AUTH HANDLING
+   * AUTH + TOKEN HELPERS (PKCE)
    **************************************************************/
   const authStatusDot = document.getElementById("authStatusDot");
   const authStatusText = document.getElementById("authStatusText");
@@ -465,11 +428,7 @@
   function getStoredTokens() {
     const raw = localStorage.getItem("sj_spotify_tokens");
     if (!raw) return null;
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return null;
-    }
+    try { return JSON.parse(raw); } catch { return null; }
   }
 
   function storeTokens(tokens) {
@@ -492,7 +451,6 @@
 
     let res = await fetch(url, options);
     if (res.status === 401 && tokens.refresh_token) {
-      // try refresh
       const ok = await refreshAccessToken(tokens.refresh_token);
       if (!ok) throw new Error("Spotify session expired. Please reconnect.");
       tokens = getStoredTokens();
@@ -564,13 +522,12 @@
     const state = params.get("state");
     const storedState = localStorage.getItem("sj_spotify_state");
 
-    if (!code) return; // nothing to do
+    if (!code) return;
 
-    // Clear query params from URL afterwards
     window.history.replaceState({}, document.title, REDIRECT_URI);
 
     if (!state || state !== storedState) {
-      alert("Spotify login failed: state mismatch. Please try again.");
+      alert("Spotify login failed. Please try again.");
       return;
     }
     const codeVerifier = localStorage.getItem("sj_spotify_verifier");
@@ -611,13 +568,12 @@
   }
 
   /**************************************************************
-   * UI: Search & add tracks
+   * SEARCH & ADD
    **************************************************************/
   const searchInput = document.getElementById("searchInput");
   const searchBtn = document.getElementById("searchBtn");
   const searchResults = document.getElementById("searchResults");
   const searchMessage = document.getElementById("searchMessage");
-  const guestNoteInput = document.getElementById("guestNoteInput");
 
   async function performSearch() {
     const q = searchInput.value.trim();
@@ -629,22 +585,21 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=15&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&limit=20&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
       if (!tracks.length) {
-        searchMessage.textContent = "No results. Try a different search term.";
+        searchMessage.textContent = "No results. Try a different search.";
         return;
       }
-      searchMessage.textContent = `Showing ${tracks.length} result(s). Tap a track to add to the Party playlist.`;
+      searchMessage.textContent = `Tap ➕ to add a track.`;
       tracks.forEach((t) => {
         const row = document.createElement("div");
         row.className = "track-row";
-        row.onclick = () => addTrackToParty(t);
 
-        const meta = document.createElement("div");
-        meta.className = "track-meta";
+        const main = document.createElement("div");
+        main.className = "track-main";
 
         const title = document.createElement("div");
         title.className = "track-title";
@@ -655,21 +610,22 @@
         const artistNames = t.artists.map((a) => a.name).join(", ");
         sub.textContent = `${artistNames} • ${t.album.name}`;
 
-        meta.appendChild(title);
-        meta.appendChild(sub);
+        main.appendChild(title);
+        main.appendChild(sub);
 
         const right = document.createElement("div");
-        right.style.display = "flex";
-        right.style.flexDirection = "column";
-        right.style.alignItems = "flex-end";
-        right.style.gap = "4px";
+        right.className = "track-right";
 
-        const pill = document.createElement("span");
-        pill.className = "pill-small";
-        pill.textContent = "Tap to queue";
-        right.appendChild(pill);
+        const addBtn = document.createElement("button");
+        addBtn.className = "btn-icon btn-add";
+        addBtn.innerHTML = "➕ Add";
+        addBtn.onclick = (e) => {
+          e.stopPropagation();
+          addTrackToParty(t);
+        };
 
-        row.appendChild(meta);
+        right.appendChild(addBtn);
+        row.appendChild(main);
         row.appendChild(right);
         searchResults.appendChild(row);
       });
@@ -680,46 +636,29 @@
   }
 
   async function addTrackToParty(track) {
-    if (!PARTY_PLAYLIST_ID || PARTY_PLAYLIST_ID === "PASTE_YOUR_PLAYLIST_ID_HERE") {
-      alert("You still need to set PARTY_PLAYLIST_ID in the HTML file.");
+    if (!PARTY_PLAYLIST_ID) {
+      alert("Playlist ID not set.");
       return;
     }
-    const note = guestNoteInput.value.trim();
     searchMessage.textContent = `Adding "${track.name}"…`;
-
     try {
-      // 1) Add track to playlist
-      const addRes = await fetchWithAuth(
+      await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
           method: "POST",
           body: JSON.stringify({ uris: [track.uri] }),
         }
       );
-      const addData = await addRes.json();
-      const snapshotId = addData.snapshot_id;
-
-      // 2) Optionally encode note into playlist description (very simple approach: latest note)
-      if (note) {
-        const desc = `Party Jukebox – last added by: ${note}`;
-        await fetchWithAuth(`https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`, {
-          method: "PUT",
-          body: JSON.stringify({ description: desc }),
-        });
-      }
-
       searchMessage.textContent = `Added: ${track.name}`;
-      guestNoteInput.value = "";
-      // refresh playlist view
       await refreshPlaylistView();
     } catch (err) {
       console.error(err);
-      searchMessage.textContent = "Failed to add track. Check connection & scopes.";
+      searchMessage.textContent = "Failed to add track.";
     }
   }
 
   /**************************************************************
-   * Playlist view
+   * PLAYLIST VIEW + REMOVE
    **************************************************************/
   const playlistView = document.getElementById("playlistView");
   const playlistMessage = document.getElementById("playlistMessage");
@@ -729,8 +668,8 @@
     playlistView.innerHTML = "";
     playlistMessage.textContent = "Loading playlist…";
 
-    if (!PARTY_PLAYLIST_ID || PARTY_PLAYLIST_ID === "PASTE_YOUR_PLAYLIST_ID_HERE") {
-      playlistMessage.textContent = "Host still needs to set PARTY_PLAYLIST_ID in the HTML config.";
+    if (!PARTY_PLAYLIST_ID) {
+      playlistMessage.textContent = "Playlist ID missing.";
       return;
     }
 
@@ -740,26 +679,29 @@
       );
       const data = await res.json();
 
+      lastSnapshotId = data.snapshot_id || null;
       const name = data.name || "Party playlist";
-      const desc = data.description || "";
       const tracks = data.tracks?.items || [];
 
       playlistMessage.textContent = `${name} – ${tracks.length} track(s)`;
-      if (desc) {
-        const noteDiv = document.createElement("div");
-        noteDiv.className = "msg";
-        noteDiv.textContent = `Playlist note: ${desc}`;
-        playlistView.appendChild(noteDiv);
+
+      if (!tracks.length) {
+        const empty = document.createElement("div");
+        empty.className = "msg";
+        empty.textContent = "Playlist is empty. Add something on the left.";
+        playlistView.appendChild(empty);
+        return;
       }
 
       tracks.forEach((item, index) => {
         const t = item.track;
         if (!t) return;
+
         const row = document.createElement("div");
         row.className = "track-row";
 
-        const meta = document.createElement("div");
-        meta.className = "track-meta";
+        const main = document.createElement("div");
+        main.className = "track-main";
 
         const title = document.createElement("div");
         title.className = "track-title";
@@ -768,70 +710,94 @@
         const sub = document.createElement("div");
         sub.className = "track-sub";
         const artistNames = t.artists.map((a) => a.name).join(", ");
-        const addedBy =
-          item.added_by && item.added_by.id ? ` • added by ${item.added_by.id}` : "";
-        sub.textContent = `${artistNames} • ${t.album.name}${addedBy}`;
+        sub.textContent = `${artistNames} • ${t.album.name}`;
 
-        meta.appendChild(title);
-        meta.appendChild(sub);
+        main.appendChild(title);
+        main.appendChild(sub);
 
-        row.appendChild(meta);
+        const right = document.createElement("div");
+        right.className = "track-right";
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "btn-icon btn-remove";
+        removeBtn.innerHTML = "🗑 Remove";
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          removeTrackFromParty(index, t.uri);
+        };
+
+        right.appendChild(removeBtn);
+        row.appendChild(main);
+        row.appendChild(right);
         playlistView.appendChild(row);
       });
-
-      if (!tracks.length) {
-        const empty = document.createElement("div");
-        empty.className = "msg";
-        empty.textContent = "Playlist is currently empty. Add something from the left.";
-        playlistView.appendChild(empty);
-      }
     } catch (err) {
       console.error(err);
-      playlistMessage.textContent = "Error loading playlist from Spotify.";
+      playlistMessage.textContent = "Error loading playlist.";
+    }
+  }
+
+  async function removeTrackFromParty(position, uri) {
+    if (!PARTY_PLAYLIST_ID || lastSnapshotId === null) {
+      alert("Playlist state not ready yet.");
+      return;
+    }
+    const confirmRemove = confirm("Remove this track from the party playlist?");
+    if (!confirmRemove) return;
+
+    try {
+      const body = {
+        tracks: [{ uri: uri, positions: [position] }],
+        snapshot_id: lastSnapshotId
+      };
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+        {
+          method: "DELETE",
+          body: JSON.stringify(body),
+        }
+      );
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Remove failed:", txt);
+        playlistMessage.textContent = "Could not remove track. Refreshing…";
+      } else {
+        playlistMessage.textContent = "Track removed.";
+      }
+      await refreshPlaylistView();
+    } catch (err) {
+      console.error(err);
+      playlistMessage.textContent = "Error removing track.";
     }
   }
 
   /**************************************************************
-   * Wire up events & bootstrap auth state
+   * EVENTS & INIT
    **************************************************************/
-  loginBtn.addEventListener("click", () => {
-    beginSpotifyLogin();
-  });
-
+  loginBtn.addEventListener("click", beginSpotifyLogin);
   logoutBtn.addEventListener("click", () => {
     clearTokens();
     setAuthStatus(false, "Not connected");
     searchResults.innerHTML = "";
     playlistView.innerHTML = "";
     searchMessage.textContent = "";
-    playlistMessage.textContent = "Logged out of Spotify.";
+    playlistMessage.textContent = "";
   });
 
-  searchBtn.addEventListener("click", () => {
-    performSearch();
-  });
+  searchBtn.addEventListener("click", performSearch);
   searchInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") performSearch();
   });
-
-  refreshPlaylistBtn.addEventListener("click", () => {
-    refreshPlaylistView();
-  });
+  refreshPlaylistBtn.addEventListener("click", refreshPlaylistView);
 
   (async function init() {
     const tokens = getStoredTokens();
     if (tokens && tokens.access_token) {
       setAuthStatus(true, "Connected");
-      try {
-        await refreshPlaylistView();
-      } catch {
-        // ignore; user might need to re-auth
-      }
+      try { await refreshPlaylistView(); } catch {}
     } else {
       setAuthStatus(false, "Not connected");
     }
-
-    // handle Spotify redirect, if present
     await handleAuthCallback();
   })();
 </script>
