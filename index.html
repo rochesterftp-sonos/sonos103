@@ -458,6 +458,7 @@
   const SPOTIFY_CLIENT_ID = "b48fe08bcf6c448aabe8774fbfdcd943";
   const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; // must match Spotify app
   const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // Three Tails Tavern playlist
+  const PLAYLIST_URI = "spotify:playlist:3oHuSCHOpiA2DOOI72uR2f";
 
   // Auto-remove the last played track from the playlist when the song changes
   const AUTO_REMOVE_PLAYED = true;
@@ -467,7 +468,8 @@
     "playlist-modify-private",
     "playlist-modify-public",
     "user-read-playback-state",
-    "user-read-currently-playing"
+    "user-read-currently-playing",
+    "user-modify-playback-state" // needed to resume playlist
   ];
 
   let lastSnapshotId = null;
@@ -751,6 +753,8 @@
       );
       searchMessage.textContent = `Added: ${track.name}`;
       await refreshPlaylistView();
+      // If Spotify wandered off into Autoplay/radio, pull it back to this playlist
+      await maybeResumePartyPlaylist();
     } catch (err) {
       console.error(err);
       searchMessage.textContent = "Failed to add track.";
@@ -1023,6 +1027,63 @@
     if (nowPlayingIntervalId) {
       clearInterval(nowPlayingIntervalId);
       nowPlayingIntervalId = null;
+    }
+  }
+
+  /**************************************************************
+   * RESUME PARTY PLAYLIST WHEN NEEDED
+   **************************************************************/
+  async function maybeResumePartyPlaylist() {
+    try {
+      // Make sure we know what is currently playing
+      await refreshNowPlaying();
+      if (!nowPlaying || !nowPlaying.device) return;
+
+      const contextUri = nowPlaying.context && nowPlaying.context.uri;
+      // Already playing our party playlist? Do nothing.
+      if (contextUri === PLAYLIST_URI) return;
+
+      // Not our playlist (probably Autoplay/radio) -> start our playlist on the same device
+      const deviceId = nowPlaying.device.id;
+      if (!deviceId) return;
+
+      // Find the newest track index so we start at the last-added song
+      let offsetPosition = 0;
+      try {
+        const res = await fetchWithAuth(
+          `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
+        );
+        const data = await res.json();
+        const items = data.tracks?.items || [];
+        if (items.length > 0) {
+          offsetPosition = items.length - 1; // newest track at the bottom
+        }
+      } catch (e) {
+        console.error("Failed to read playlist for resume:", e);
+      }
+
+      const body = {
+        context_uri: PLAYLIST_URI,
+        offset: { position: offsetPosition }
+      };
+
+      const url = `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(
+        deviceId
+      )}`;
+
+      await fetchWithAuth(url, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+
+      // Give it a moment and then refresh Now Playing
+      setTimeout(() => {
+        refreshNowPlaying();
+      }, 1000);
+    } catch (err) {
+      console.error("Error trying to resume party playlist:", err);
+      // If Spotify/sonos refuses the command, party still works;
+      // you can always manually start the playlist again.
     }
   }
 
