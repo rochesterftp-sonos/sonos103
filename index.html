@@ -1033,59 +1033,61 @@
   /**************************************************************
    * RESUME PARTY PLAYLIST WHEN NEEDED
    **************************************************************/
-  async function maybeResumePartyPlaylist() {
+async function maybeResumePartyPlaylist() {
+  try {
+    // Ask Spotify what is currently playing (and where)
+    const res = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+    const data = await res.json();
+
+    if (!data || !data.device) {
+      // No active device for this account
+      return;
+    }
+
+    const contextUri = data.context && data.context.uri;
+
+    // If we're already playing the party playlist, do nothing
+    if (contextUri === PLAYLIST_URI) {
+      return;
+    }
+
+    // At this point, we are on Autoplay / radio / something else.
+    // We'll try to switch *the current active device* back to the party playlist.
+
+    let offsetPosition = 0;
     try {
-      // Make sure we know what is currently playing
-      await refreshNowPlaying();
-      if (!nowPlaying || !nowPlaying.device) return;
-
-      const contextUri = nowPlaying.context && nowPlaying.context.uri;
-      // Already playing our party playlist? Do nothing.
-      if (contextUri === PLAYLIST_URI) return;
-
-      // Not our playlist (probably Autoplay/radio) -> start our playlist on the same device
-      const deviceId = nowPlaying.device.id;
-      if (!deviceId) return;
-
-      // Find the newest track index so we start at the last-added song
-      let offsetPosition = 0;
-      try {
-        const res = await fetchWithAuth(
-          `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
-        );
-        const data = await res.json();
-        const items = data.tracks?.items || [];
-        if (items.length > 0) {
-          offsetPosition = items.length - 1; // newest track at the bottom
-        }
-      } catch (e) {
-        console.error("Failed to read playlist for resume:", e);
+      const plRes = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
+      );
+      const plData = await plRes.json();
+      const items = plData.tracks?.items || [];
+      if (items.length > 0) {
+        // start at the newest added track
+        offsetPosition = items.length - 1;
       }
+    } catch (e) {
+      console.error("Failed to read playlist for resume:", e);
+    }
 
-      const body = {
+    // IMPORTANT: no device_id parameter – let Spotify use the current active device
+    await fetchWithAuth("https://api.spotify.com/v1/me/player/play", {
+      method: "PUT",
+      body: JSON.stringify({
         context_uri: PLAYLIST_URI,
         offset: { position: offsetPosition }
-      };
+      }),
+    });
 
-      const url = `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(
-        deviceId
-      )}`;
-
-      await fetchWithAuth(url, {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-
-      // Give it a moment and then refresh Now Playing
-      setTimeout(() => {
-        refreshNowPlaying();
-      }, 1000);
-    } catch (err) {
-      console.error("Error trying to resume party playlist:", err);
-      // If Spotify/sonos refuses the command, party still works;
-      // you can always manually start the playlist again.
-    }
+    // Give Spotify a moment to switch, then refresh the UI
+    setTimeout(() => {
+      refreshNowPlaying();
+    }, 1500);
+  } catch (err) {
+    console.error("Error trying to resume party playlist:", err);
+    // If this fails (e.g., Sonos is a restricted device), everything else still works.
   }
+}
+
 
   /**************************************************************
    * EVENTS & INIT
