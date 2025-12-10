@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>House Party Jukebox</title>
+  <title>Three Tails Tavern JukeBox</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -136,11 +136,72 @@
       border-color: rgba(148,163,184,0.5);
     }
 
+    /* NOW PLAYING CARD */
+    .now-playing {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 14px;
+      border-radius: 18px;
+      border: 1px solid rgba(55,65,81,0.85);
+      background: radial-gradient(circle at top left, rgba(34,197,94,0.12), rgba(6,10,25,0.98));
+      box-shadow: 0 12px 30px rgba(0,0,0,0.55);
+    }
+    .np-art {
+      width: 78px;
+      height: 78px;
+      border-radius: 18px;
+      background-size: cover;
+      background-position: center;
+      background-color: #020617;
+      flex-shrink: 0;
+    }
+    .np-content {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .np-title {
+      font-size: 1rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .np-artist {
+      font-size: .86rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .np-meta {
+      font-size: .8rem;
+      color: var(--text-dim);
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .np-meta span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .np-status-pill {
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: .78rem;
+      border: 1px solid rgba(148,163,184,0.7);
+      color: var(--text-dim);
+    }
+
     .layout {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-top: 4px;
+      margin-top: 6px;
     }
     @media (min-width: 900px) {
       .layout {
@@ -254,13 +315,6 @@
       align-items: flex-end;
       justify-content: center;
     }
-    .pill-small {
-      font-size: .78rem;
-      padding: 4px 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(148,163,184,0.6);
-      color: var(--text-dim);
-    }
 
     .btn-icon {
       border-radius: 999px;
@@ -307,10 +361,10 @@
   <header>
     <div class="title-block">
       <div class="title">
-        🎧 House Party Jukebox
+        🎧 Three Tails Tavern JukeBox
       </div>
       <div class="tagline">
-        Guests search & add songs. You pick Sonos as the output from the Spotify app.
+        Guests add songs to the party playlist. You pick your Sonos group in the Spotify app.
       </div>
     </div>
     <div class="status-area">
@@ -325,6 +379,20 @@
       </div>
     </div>
   </header>
+
+  <!-- NOW PLAYING BAR -->
+  <section class="now-playing" id="nowPlayingCard">
+    <div class="np-art" id="nowPlayingArt"></div>
+    <div class="np-content">
+      <div class="np-title" id="nowPlayingTitle">Not playing</div>
+      <div class="np-artist" id="nowPlayingArtist">Start music from Spotify and select your Sonos group.</div>
+      <div class="np-meta">
+        <span id="nowPlayingDevice"></span>
+        <span class="np-status-pill" id="nowPlayingStatus"></span>
+      </div>
+    </div>
+    <button class="btn btn-primary" id="playPauseBtn" disabled>Play</button>
+  </section>
 
   <div class="layout">
     <!-- LEFT: Search and add -->
@@ -375,10 +443,15 @@
   const SPOTIFY_SCOPES = [
     "playlist-read-private",
     "playlist-modify-private",
-    "playlist-modify-public"
+    "playlist-modify-public",
+    "user-read-playback-state",
+    "user-read-currently-playing",
+    "user-modify-playback-state"
   ];
 
   let lastSnapshotId = null;
+  let nowPlaying = null;
+  let nowPlayingIntervalId = null;
 
   /**************************************************************
    * AUTH + TOKEN HELPERS (PKCE)
@@ -561,6 +634,8 @@
       localStorage.removeItem("sj_spotify_verifier");
       setAuthStatus(true, "Connected");
       await refreshPlaylistView();
+      await refreshNowPlaying();
+      startNowPlayingPolling();
     } catch (err) {
       console.error(err);
       alert("Error completing Spotify login.");
@@ -772,6 +847,108 @@
   }
 
   /**************************************************************
+   * NOW PLAYING & PLAY/PAUSE
+   **************************************************************/
+  const nowPlayingArt = document.getElementById("nowPlayingArt");
+  const nowPlayingTitle = document.getElementById("nowPlayingTitle");
+  const nowPlayingArtist = document.getElementById("nowPlayingArtist");
+  const nowPlayingDevice = document.getElementById("nowPlayingDevice");
+  const nowPlayingStatus = document.getElementById("nowPlayingStatus");
+  const playPauseBtn = document.getElementById("playPauseBtn");
+
+  function renderEmptyNowPlaying() {
+    nowPlaying = null;
+    nowPlayingArt.style.backgroundImage = "none";
+    nowPlayingTitle.textContent = "Not playing";
+    nowPlayingArtist.textContent = "Start music from Spotify and select your Sonos group.";
+    nowPlayingDevice.textContent = "";
+    nowPlayingStatus.textContent = "";
+    playPauseBtn.disabled = true;
+    playPauseBtn.textContent = "Play";
+  }
+
+  function renderNowPlaying(data) {
+    nowPlaying = data;
+    const item = data.item;
+    if (!item) {
+      renderEmptyNowPlaying();
+      return;
+    }
+
+    const img = (item.album.images && item.album.images[0]) || null;
+    if (img) {
+      nowPlayingArt.style.backgroundImage = `url("${img.url}")`;
+    } else {
+      nowPlayingArt.style.backgroundImage = "none";
+    }
+
+    const artistNames = item.artists.map(a => a.name).join(", ");
+
+    nowPlayingTitle.textContent = item.name || "Unknown track";
+    nowPlayingArtist.textContent = artistNames || "";
+    nowPlayingDevice.textContent = data.device && data.device.name
+      ? `Device: ${data.device.name}`
+      : "";
+    nowPlayingStatus.textContent = data.is_playing ? "Playing" : "Paused";
+    playPauseBtn.disabled = false;
+    playPauseBtn.textContent = data.is_playing ? "Pause" : "Play";
+  }
+
+  async function refreshNowPlaying() {
+    try {
+      const res = await fetchWithAuth(
+        "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track"
+      );
+      // 204 = no content (nothing currently playing)
+      if (res.status === 204) {
+        renderEmptyNowPlaying();
+        return;
+      }
+      const data = await res.json();
+      if (!data || !data.item) {
+        renderEmptyNowPlaying();
+        return;
+      }
+      renderNowPlaying(data);
+    } catch (err) {
+      console.error("Now playing error:", err);
+      renderEmptyNowPlaying();
+    }
+  }
+
+  async function togglePlayPause() {
+    if (!nowPlaying) return;
+    playPauseBtn.disabled = true;
+    try {
+      const endpoint = nowPlaying.is_playing
+        ? "https://api.spotify.com/v1/me/player/pause"
+        : "https://api.spotify.com/v1/me/player/play";
+
+      await fetchWithAuth(endpoint, { method: "PUT", body: "" });
+      // give Spotify a moment, then refresh state
+      setTimeout(() => { refreshNowPlaying(); }, 600);
+    } catch (err) {
+      console.error("Play/pause error:", err);
+    } finally {
+      playPauseBtn.disabled = false;
+    }
+  }
+
+  function startNowPlayingPolling() {
+    stopNowPlayingPolling();
+    nowPlayingIntervalId = setInterval(() => {
+      refreshNowPlaying().catch(() => {});
+    }, 15000); // every 15s
+  }
+
+  function stopNowPlayingPolling() {
+    if (nowPlayingIntervalId) {
+      clearInterval(nowPlayingIntervalId);
+      nowPlayingIntervalId = null;
+    }
+  }
+
+  /**************************************************************
    * EVENTS & INIT
    **************************************************************/
   loginBtn.addEventListener("click", beginSpotifyLogin);
@@ -782,6 +959,8 @@
     playlistView.innerHTML = "";
     searchMessage.textContent = "";
     playlistMessage.textContent = "";
+    renderEmptyNowPlaying();
+    stopNowPlayingPolling();
   });
 
   searchBtn.addEventListener("click", performSearch);
@@ -789,12 +968,18 @@
     if (e.key === "Enter") performSearch();
   });
   refreshPlaylistBtn.addEventListener("click", refreshPlaylistView);
+  playPauseBtn.addEventListener("click", togglePlayPause);
 
   (async function init() {
+    renderEmptyNowPlaying();
     const tokens = getStoredTokens();
     if (tokens && tokens.access_token) {
       setAuthStatus(true, "Connected");
-      try { await refreshPlaylistView(); } catch {}
+      try {
+        await refreshPlaylistView();
+        await refreshNowPlaying();
+        startNowPlayingPolling();
+      } catch {}
     } else {
       setAuthStatus(false, "Not connected");
     }
