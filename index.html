@@ -1018,21 +1018,38 @@
   }
 
   async function togglePlayPause() {
-    if (!nowPlaying) return;
-    playPauseBtn.disabled = true;
-    try {
-      const endpoint = nowPlaying.is_playing
-        ? "https://api.spotify.com/v1/me/player/pause"
-        : "https://api.spotify.com/v1/me/player/play";
+  if (!nowPlaying) return;
 
-      await fetchWithAuth(endpoint, { method: "PUT" });
-      setTimeout(() => { refreshNowPlaying(); }, 600);
-    } catch (err) {
-      console.error("Play/pause error:", err);
-    } finally {
-      playPauseBtn.disabled = false;
+  playPauseBtn.disabled = true;
+
+  try {
+    // Use the active device if Spotify reports one
+    const deviceId = nowPlaying.device && nowPlaying.device.id;
+    const isPlaying = !!nowPlaying.is_playing;
+
+    let url = isPlaying
+      ? "https://api.spotify.com/v1/me/player/pause"
+      : "https://api.spotify.com/v1/me/player/play";
+
+    // If we know the device, explicitly tell Spotify to control THAT device
+    if (deviceId) {
+      url += `?device_id=${encodeURIComponent(deviceId)}`;
     }
+
+    await fetchWithAuth(url, { method: "PUT" });
+
+    // Give Spotify a moment to update state, then refresh UI
+    setTimeout(() => {
+      refreshNowPlaying();
+    }, 700);
+  } catch (err) {
+    console.error("Play/pause error:", err);
+    nowPlayingStatus.textContent =
+      "Playback control failed – make sure Spotify is playing to Sonos.";
+  } finally {
+    playPauseBtn.disabled = false;
   }
+}
 
   function startNowPlayingPolling() {
     stopNowPlayingPolling();
