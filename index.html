@@ -311,9 +311,13 @@
     .track-right {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
       align-items: flex-end;
       justify-content: center;
+    }
+    .track-reorder {
+      display: flex;
+      gap: 4px;
     }
 
     .btn-icon {
@@ -345,6 +349,20 @@
       box-shadow: 0 0 0 1px rgba(248,113,113,0.3);
     }
     .btn-remove:hover { background: rgba(248,113,113,0.35); transform: translateY(-1px); }
+    .btn-mini {
+      min-width: 36px;
+      min-height: 32px;
+      padding: 4px 8px;
+      font-size: .8rem;
+      box-shadow: none;
+      background: rgba(15,23,42,0.95);
+      color: var(--text-dim);
+      border-radius: 999px;
+      border: 1px solid rgba(55,65,81,0.9);
+    }
+    .btn-mini:hover {
+      background: rgba(31,41,55,0.95);
+    }
 
     .msg {
       font-size: .82rem;
@@ -440,6 +458,9 @@
   const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; // must match Spotify app
   const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // your party playlist
 
+  // Auto-remove the last played track from the playlist when the song changes
+  const AUTO_REMOVE_PLAYED = true;
+
   const SPOTIFY_SCOPES = [
     "playlist-read-private",
     "playlist-modify-private",
@@ -452,6 +473,7 @@
   let lastSnapshotId = null;
   let nowPlaying = null;
   let nowPlayingIntervalId = null;
+  let lastTrackUri = null;
 
   /**************************************************************
    * AUTH + TOKEN HELPERS (PKCE)
@@ -518,8 +540,11 @@
       throw new Error("Not authenticated with Spotify");
     }
     const headers = options.headers || {};
+    // Only set Content-Type when we actually send a body
+    if (options.body !== undefined && options.body !== null && options.method && options.method !== "GET") {
+      headers["Content-Type"] = headers["Content-Type"] || "application/json";
+    }
     headers["Authorization"] = `Bearer ${tokens.access_token}`;
-    headers["Content-Type"] = headers["Content-Type"] || "application/json";
     options.headers = headers;
 
     let res = await fetch(url, options);
@@ -733,7 +758,7 @@
   }
 
   /**************************************************************
-   * PLAYLIST VIEW + REMOVE
+   * PLAYLIST VIEW + REMOVE + REORDER
    **************************************************************/
   const playlistView = document.getElementById("playlistView");
   const playlistMessage = document.getElementById("playlistMessage");
@@ -793,6 +818,30 @@
         const right = document.createElement("div");
         right.className = "track-right";
 
+        const reorderRow = document.createElement("div");
+        reorderRow.className = "track-reorder";
+
+        const upBtn = document.createElement("button");
+        upBtn.className = "btn-mini";
+        upBtn.textContent = "↑";
+        upBtn.disabled = index === 0;
+        upBtn.onclick = (e) => {
+          e.stopPropagation();
+          moveTrack(index, -1);
+        };
+
+        const downBtn = document.createElement("button");
+        downBtn.className = "btn-mini";
+        downBtn.textContent = "↓";
+        downBtn.disabled = index === tracks.length - 1;
+        downBtn.onclick = (e) => {
+          e.stopPropagation();
+          moveTrack(index, +1);
+        };
+
+        reorderRow.appendChild(upBtn);
+        reorderRow.appendChild(downBtn);
+
         const removeBtn = document.createElement("button");
         removeBtn.className = "btn-icon btn-remove";
         removeBtn.innerHTML = "🗑 Remove";
@@ -801,7 +850,9 @@
           removeTrackFromParty(index, t.uri);
         };
 
+        right.appendChild(reorderRow);
         right.appendChild(removeBtn);
+
         row.appendChild(main);
         row.appendChild(right);
         playlistView.appendChild(row);
@@ -812,13 +863,44 @@
     }
   }
 
-  async function removeTrackFromParty(position, uri) {
-    if (!PARTY_PLAYLIST_ID || lastSnapshotId === null) {
+  async function moveTrack(position, delta) {
+    if (lastSnapshotId === null) {
       alert("Playlist state not ready yet.");
       return;
     }
-    const confirmRemove = confirm("Remove this track from the party playlist?");
-    if (!confirmRemove) return;
+    const range_start = position;
+    const insert_before = position + delta + (delta > 0 ? 1 : 0);
+
+    try {
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            range_start,
+            range_length: 1,
+            insert_before,
+            snapshot_id: lastSnapshotId,
+          }),
+        }
+      );
+      const data = await res.json();
+      lastSnapshotId = data.snapshot_id || lastSnapshotId;
+      await refreshPlaylistView();
+    } catch (err) {
+      console.error("Reorder error:", err);
+      playlistMessage.textContent = "Error reordering tracks.";
+    }
+  }
+
+  async function removeTrackFromParty(position, uri, skipConfirm = false) {
+    if (!PARTY_PLAYLIST_ID || lastSnapshotId === null) {
+      return;
+    }
+    if (!skipConfirm) {
+      const confirmRemove = confirm("Remove this track from the party playlist?");
+      if (!confirmRemove) return;
+    }
 
     try {
       const body = {
@@ -832,17 +914,28 @@
           body: JSON.stringify(body),
         }
       );
-      if (!res.ok) {
-        const txt = await res.text();
-        console.error("Remove failed:", txt);
-        playlistMessage.textContent = "Could not remove track. Refreshing…";
-      } else {
-        playlistMessage.textContent = "Track removed.";
-      }
+      const data = await res.json();
+      lastSnapshotId = data.snapshot_id || lastSnapshotId;
       await refreshPlaylistView();
     } catch (err) {
-      console.error(err);
+      console.error("Error removing track:", err);
       playlistMessage.textContent = "Error removing track.";
+    }
+  }
+
+  async function removeFirstOccurrenceOfTrack(uri) {
+    try {
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
+      );
+      const data = await res.json();
+      lastSnapshotId = data.snapshot_id || lastSnapshotId;
+      const items = data.tracks?.items || [];
+      const idx = items.findIndex(it => it.track && it.track.uri === uri);
+      if (idx === -1) return;
+      await removeTrackFromParty(idx, uri, true);
+    } catch (err) {
+      console.error("Auto-remove error:", err);
     }
   }
 
@@ -869,6 +962,7 @@
 
   function renderNowPlaying(data) {
     nowPlaying = data;
+
     const item = data.item;
     if (!item) {
       renderEmptyNowPlaying();
@@ -899,7 +993,6 @@
       const res = await fetchWithAuth(
         "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track"
       );
-      // 204 = no content (nothing currently playing)
       if (res.status === 204) {
         renderEmptyNowPlaying();
         return;
@@ -909,6 +1002,14 @@
         renderEmptyNowPlaying();
         return;
       }
+
+      const currentUri = data.item.uri;
+      if (AUTO_REMOVE_PLAYED && lastTrackUri && lastTrackUri !== currentUri) {
+        // track changed – try to remove the previous one from the playlist
+        removeFirstOccurrenceOfTrack(lastTrackUri);
+      }
+      lastTrackUri = currentUri;
+
       renderNowPlaying(data);
     } catch (err) {
       console.error("Now playing error:", err);
@@ -924,8 +1025,7 @@
         ? "https://api.spotify.com/v1/me/player/pause"
         : "https://api.spotify.com/v1/me/player/play";
 
-      await fetchWithAuth(endpoint, { method: "PUT", body: "" });
-      // give Spotify a moment, then refresh state
+      await fetchWithAuth(endpoint, { method: "PUT" });
       setTimeout(() => { refreshNowPlaying(); }, 600);
     } catch (err) {
       console.error("Play/pause error:", err);
