@@ -398,18 +398,19 @@
     </div>
   </header>
 
-  <!-- NOW PLAYING BAR -->
+  <!-- NOW PLAYING BAR (no controls, just display) -->
   <section class="now-playing" id="nowPlayingCard">
     <div class="np-art" id="nowPlayingArt"></div>
     <div class="np-content">
       <div class="np-title" id="nowPlayingTitle">Not playing</div>
-      <div class="np-artist" id="nowPlayingArtist">Start music from Spotify and select your Sonos group.</div>
+      <div class="np-artist" id="nowPlayingArtist">
+        Start music from Spotify and select your Sonos group.
+      </div>
       <div class="np-meta">
         <span id="nowPlayingDevice"></span>
         <span class="np-status-pill" id="nowPlayingStatus"></span>
       </div>
     </div>
-    <button class="btn btn-primary" id="playPauseBtn" disabled>Play</button>
   </section>
 
   <div class="layout">
@@ -456,7 +457,7 @@
    **************************************************************/
   const SPOTIFY_CLIENT_ID = "b48fe08bcf6c448aabe8774fbfdcd943";
   const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; // must match Spotify app
-  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // your party playlist
+  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // Three Tails Tavern playlist
 
   // Auto-remove the last played track from the playlist when the song changes
   const AUTO_REMOVE_PLAYED = true;
@@ -466,8 +467,7 @@
     "playlist-modify-private",
     "playlist-modify-public",
     "user-read-playback-state",
-    "user-read-currently-playing",
-    "user-modify-playback-state"
+    "user-read-currently-playing"
   ];
 
   let lastSnapshotId = null;
@@ -540,8 +540,8 @@
       throw new Error("Not authenticated with Spotify");
     }
     const headers = options.headers || {};
-    // Only set Content-Type when we actually send a body
-    if (options.body !== undefined && options.body !== null && options.method && options.method !== "GET") {
+    if (options.body !== undefined && options.body !== null &&
+        options.method && options.method !== "GET") {
       headers["Content-Type"] = headers["Content-Type"] || "application/json";
     }
     headers["Authorization"] = `Bearer ${tokens.access_token}`;
@@ -940,14 +940,13 @@
   }
 
   /**************************************************************
-   * NOW PLAYING & PLAY/PAUSE
+   * NOW PLAYING (READ-ONLY)
    **************************************************************/
   const nowPlayingArt = document.getElementById("nowPlayingArt");
   const nowPlayingTitle = document.getElementById("nowPlayingTitle");
   const nowPlayingArtist = document.getElementById("nowPlayingArtist");
   const nowPlayingDevice = document.getElementById("nowPlayingDevice");
   const nowPlayingStatus = document.getElementById("nowPlayingStatus");
-  const playPauseBtn = document.getElementById("playPauseBtn");
 
   function renderEmptyNowPlaying() {
     nowPlaying = null;
@@ -956,8 +955,6 @@
     nowPlayingArtist.textContent = "Start music from Spotify and select your Sonos group.";
     nowPlayingDevice.textContent = "";
     nowPlayingStatus.textContent = "";
-    playPauseBtn.disabled = true;
-    playPauseBtn.textContent = "Play";
   }
 
   function renderNowPlaying(data) {
@@ -984,8 +981,6 @@
       ? `Device: ${data.device.name}`
       : "";
     nowPlayingStatus.textContent = data.is_playing ? "Playing" : "Paused";
-    playPauseBtn.disabled = false;
-    playPauseBtn.textContent = data.is_playing ? "Pause" : "Play";
   }
 
   async function refreshNowPlaying() {
@@ -1016,40 +1011,6 @@
       renderEmptyNowPlaying();
     }
   }
-
-  async function togglePlayPause() {
-  if (!nowPlaying) return;
-
-  playPauseBtn.disabled = true;
-
-  try {
-    // Use the active device if Spotify reports one
-    const deviceId = nowPlaying.device && nowPlaying.device.id;
-    const isPlaying = !!nowPlaying.is_playing;
-
-    let url = isPlaying
-      ? "https://api.spotify.com/v1/me/player/pause"
-      : "https://api.spotify.com/v1/me/player/play";
-
-    // If we know the device, explicitly tell Spotify to control THAT device
-    if (deviceId) {
-      url += `?device_id=${encodeURIComponent(deviceId)}`;
-    }
-
-    await fetchWithAuth(url, { method: "PUT" });
-
-    // Give Spotify a moment to update state, then refresh UI
-    setTimeout(() => {
-      refreshNowPlaying();
-    }, 700);
-  } catch (err) {
-    console.error("Play/pause error:", err);
-    nowPlayingStatus.textContent =
-      "Playback control failed – make sure Spotify is playing to Sonos.";
-  } finally {
-    playPauseBtn.disabled = false;
-  }
-}
 
   function startNowPlayingPolling() {
     stopNowPlayingPolling();
@@ -1085,7 +1046,6 @@
     if (e.key === "Enter") performSearch();
   });
   refreshPlaylistBtn.addEventListener("click", refreshPlaylistView);
-  playPauseBtn.addEventListener("click", togglePlayPause);
 
   (async function init() {
     renderEmptyNowPlaying();
