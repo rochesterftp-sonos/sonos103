@@ -398,7 +398,6 @@
     </div>
   </header>
 
-  <!-- NOW PLAYING BAR (no controls, just display) -->
   <section class="now-playing" id="nowPlayingCard">
     <div class="np-art" id="nowPlayingArt"></div>
     <div class="np-content">
@@ -414,7 +413,6 @@
   </section>
 
   <div class="layout">
-    <!-- LEFT: Search and add -->
     <div class="col">
       <section class="panel">
         <div class="panel-header">
@@ -434,7 +432,6 @@
       </section>
     </div>
 
-    <!-- RIGHT: Current party playlist -->
     <div class="col">
       <section class="panel">
         <div class="panel-header">
@@ -687,7 +684,8 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=20&q=${encodeURIComponent(q)}`;
+      // FIX: Use correct Spotify search URL
+      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -737,67 +735,73 @@
     }
   }
 
-async function addTrackToParty(track) {
-  if (!PARTY_PLAYLIST_ID) {
-    alert("Playlist ID not set.");
-    return;
-  }
-
-  searchMessage.textContent = `Adding "${track.name}"…`;
-
-  try {
-    // 1) Add to the party playlist (This saves it for history/visibility)
-    await fetchWithAuth(
-      `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
-      {
-        method: "POST",
-        body: JSON.stringify({ uris: [track.uri] }),
-      }
-    );
-
-    // 2) Check the current state of the player
-    // We need to know: Are we playing the Jukebox playlist? Or did we drift to Radio?
-    const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-    // If status is 204 (no content), nothing is playing, so we can't check context.
-    // We assume we need to start fresh.
-    const state = st.status === 204 ? null : await st.json();
-    
-    const contextUri = state?.context?.uri || "";
-    const isOurPlaylist = (contextUri === PLAYLIST_URI);
-
-    if (isOurPlaylist) {
-      // SCENARIO A: The Jukebox is running normally. 
-      // Just add the song to the queue so it plays next smoothly.
-      const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
-      await fetchWithAuth(queueUrl, { method: "POST" });
-      searchMessage.textContent = `Queued: ${track.name}`;
-      
-    } else {
-      // SCENARIO B: We drifted to Autoplay/Radio (or nothing is playing).
-      // We must FORCE the player to switch back to the Playlist context.
-      // We start playback specifically at the track we just added.
-      
-      await fetchWithAuth("https://api.spotify.com/v1/me/player/play", {
-        method: "PUT",
-        body: JSON.stringify({
-          context_uri: PLAYLIST_URI,
-          offset: { uri: track.uri } // Snap straight to the new song
-        })
-      });
-      searchMessage.textContent = `Jukebox Restarted: ${track.name}`;
+  async function addTrackToParty(track) {
+    if (!PARTY_PLAYLIST_ID) {
+      alert("Playlist ID not set.");
+      return;
     }
 
-    await refreshPlaylistView();
-    
-    // Give Spotify a moment to update status before refreshing UI
-    setTimeout(() => refreshNowPlaying(), 1000);
+    searchMessage.textContent = `Adding "${track.name}"…`;
 
-  } catch (err) {
-    console.error(err);
-    searchMessage.textContent =
-      "Could not queue track. Make sure Spotify is active on your Sonos.";
+    try {
+      // 1) Add to the party playlist (permanent record)
+      await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+        {
+          method: "POST",
+          body: JSON.stringify({ uris: [track.uri] }),
+        }
+      );
+
+      // 2) CHECK PLAYER STATE (The Fix)
+      // We check if we are playing the playlist or if we drifted to Radio.
+      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+      
+      // If 204 No Content, nothing is playing.
+      if (st.status === 204) {
+        searchMessage.textContent = `Added. (Start music on Sonos manually to resume)`;
+        await refreshPlaylistView();
+        return;
+      }
+
+      const state = await st.json();
+      const contextUri = state?.context?.uri || "";
+      const currentDeviceId = state?.device?.id; 
+      const isOurPlaylist = (contextUri === PLAYLIST_URI);
+
+      if (isOurPlaylist) {
+        // SCENARIO A: Music is playing correctly. Just queue the song.
+        const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
+        await fetchWithAuth(queueUrl, { method: "POST" });
+        searchMessage.textContent = `Queued: ${track.name}`;
+
+      } else {
+        // SCENARIO B: We drifted to Radio (or a different album).
+        // We must FORCE SWITCH back to the playlist.
+        if (!currentDeviceId) {
+           searchMessage.textContent = "Added to list (Could not switch Sonos automatically - No Active Device).";
+        } else {
+           // Force Play command
+           await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
+             method: "PUT",
+             body: JSON.stringify({
+               context_uri: PLAYLIST_URI,
+               offset: { uri: track.uri } // Start immediately at the song we just added
+             })
+           });
+           searchMessage.textContent = `Jukebox Restarted: ${track.name}`;
+        }
+      }
+
+      await refreshPlaylistView();
+      // Wait for the switch to happen then refresh UI
+      setTimeout(() => refreshNowPlaying(), 1500);
+
+    } catch (err) {
+      console.error(err);
+      searchMessage.textContent = "Error communicating with Spotify.";
+    }
   }
-}
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
@@ -1028,7 +1032,7 @@ async function addTrackToParty(track) {
   async function refreshNowPlaying() {
     try {
       const res = await fetchWithAuth(
-        "https://api.spotify.com/v1/me/player/currently-playing?additional_types=track"
+        "https://api.spotify.com/v1/me/player"
       );
       if (res.status === 204) {
         renderEmptyNowPlaying();
@@ -1067,65 +1071,6 @@ async function addTrackToParty(track) {
       nowPlayingIntervalId = null;
     }
   }
-
-  /**************************************************************
-   * RESUME PARTY PLAYLIST WHEN NEEDED
-   **************************************************************/
-async function maybeResumePartyPlaylist() {
-  try {
-    // Ask Spotify what is currently playing (and where)
-    const res = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-    const data = await res.json();
-
-    if (!data || !data.device) {
-      // No active device for this account
-      return;
-    }
-
-    const contextUri = data.context && data.context.uri;
-
-    // If we're already playing the party playlist, do nothing
-    if (contextUri === PLAYLIST_URI) {
-      return;
-    }
-
-    // At this point, we are on Autoplay / radio / something else.
-    // We'll try to switch *the current active device* back to the party playlist.
-
-    let offsetPosition = 0;
-    try {
-      const plRes = await fetchWithAuth(
-        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
-      );
-      const plData = await plRes.json();
-      const items = plData.tracks?.items || [];
-      if (items.length > 0) {
-        // start at the newest added track
-        offsetPosition = items.length - 1;
-      }
-    } catch (e) {
-      console.error("Failed to read playlist for resume:", e);
-    }
-
-    // IMPORTANT: no device_id parameter – let Spotify use the current active device
-    await fetchWithAuth("https://api.spotify.com/v1/me/player/play", {
-      method: "PUT",
-      body: JSON.stringify({
-        context_uri: PLAYLIST_URI,
-        offset: { position: offsetPosition }
-      }),
-    });
-
-    // Give Spotify a moment to switch, then refresh the UI
-    setTimeout(() => {
-      refreshNowPlaying();
-    }, 1500);
-  } catch (err) {
-    console.error("Error trying to resume party playlist:", err);
-    // If this fails (e.g., Sonos is a restricted device), everything else still works.
-  }
-}
-
 
   /**************************************************************
    * EVENTS & INIT
