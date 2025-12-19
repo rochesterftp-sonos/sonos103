@@ -746,7 +746,7 @@ async function addTrackToParty(track) {
   searchMessage.textContent = `Adding "${track.name}"…`;
 
   try {
-    // 1) Add to the party playlist (history + visibility)
+    // 1) Add to the party playlist (This saves it for history/visibility)
     await fetchWithAuth(
       `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
       {
@@ -755,38 +755,47 @@ async function addTrackToParty(track) {
       }
     );
 
-    // 2) Also add to the ACTIVE playback queue (Sonos session)
-    // This targets the currently active device if device_id is omitted.
-    const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
-    await fetchWithAuth(queueUrl, { method: "POST" });
+    // 2) Check the current state of the player
+    // We need to know: Are we playing the Jukebox playlist? Or did we drift to Radio?
+    const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+    // If status is 204 (no content), nothing is playing, so we can't check context.
+    // We assume we need to start fresh.
+    const state = st.status === 204 ? null : await st.json();
+    
+    const contextUri = state?.context?.uri || "";
+    const isOurPlaylist = (contextUri === PLAYLIST_URI);
 
-    // 3) If Spotify drifted into Autoplay/random (not our playlist),
-    // skip once so the queued request becomes next.
-    // (This is the key “snap back” behavior.)
-    try {
-      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-      const state = await st.json();
-
-      const contextUri = state?.context?.uri || "";
-      const isOurPlaylist = (contextUri === PLAYLIST_URI);
-
-      if (!isOurPlaylist) {
-        await fetchWithAuth("https://api.spotify.com/v1/me/player/next", { method: "POST" });
-      }
-    } catch (e) {
-      // If skip fails (some device states), it will still play after current track.
-      console.warn("Skip-next failed (non-fatal):", e);
+    if (isOurPlaylist) {
+      // SCENARIO A: The Jukebox is running normally. 
+      // Just add the song to the queue so it plays next smoothly.
+      const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
+      await fetchWithAuth(queueUrl, { method: "POST" });
+      searchMessage.textContent = `Queued: ${track.name}`;
+      
+    } else {
+      // SCENARIO B: We drifted to Autoplay/Radio (or nothing is playing).
+      // We must FORCE the player to switch back to the Playlist context.
+      // We start playback specifically at the track we just added.
+      
+      await fetchWithAuth("https://api.spotify.com/v1/me/player/play", {
+        method: "PUT",
+        body: JSON.stringify({
+          context_uri: PLAYLIST_URI,
+          offset: { uri: track.uri } // Snap straight to the new song
+        })
+      });
+      searchMessage.textContent = `Jukebox Restarted: ${track.name}`;
     }
 
-    searchMessage.textContent = `Queued + Added: ${track.name}`;
     await refreshPlaylistView();
-    await refreshNowPlaying();
+    
+    // Give Spotify a moment to update status before refreshing UI
+    setTimeout(() => refreshNowPlaying(), 1000);
+
   } catch (err) {
     console.error(err);
-
-    // Most common real-world cause: no active device session.
     searchMessage.textContent =
-      "Could not queue track. Make sure Spotify is actively playing to your Sonos group, then try again.";
+      "Could not queue track. Make sure Spotify is active on your Sonos.";
   }
 }
 
