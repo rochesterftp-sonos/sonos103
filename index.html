@@ -737,29 +737,58 @@
     }
   }
 
-  async function addTrackToParty(track) {
-    if (!PARTY_PLAYLIST_ID) {
-      alert("Playlist ID not set.");
-      return;
-    }
-    searchMessage.textContent = `Adding "${track.name}"…`;
-    try {
-      await fetchWithAuth(
-        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
-        {
-          method: "POST",
-          body: JSON.stringify({ uris: [track.uri] }),
-        }
-      );
-      searchMessage.textContent = `Added: ${track.name}`;
-      await refreshPlaylistView();
-      // If Spotify wandered off into Autoplay/radio, pull it back to this playlist
-      await maybeResumePartyPlaylist();
-    } catch (err) {
-      console.error(err);
-      searchMessage.textContent = "Failed to add track.";
-    }
+async function addTrackToParty(track) {
+  if (!PARTY_PLAYLIST_ID) {
+    alert("Playlist ID not set.");
+    return;
   }
+
+  searchMessage.textContent = `Adding "${track.name}"…`;
+
+  try {
+    // 1) Add to the party playlist (history + visibility)
+    await fetchWithAuth(
+      `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+      {
+        method: "POST",
+        body: JSON.stringify({ uris: [track.uri] }),
+      }
+    );
+
+    // 2) Also add to the ACTIVE playback queue (Sonos session)
+    // This targets the currently active device if device_id is omitted.
+    const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
+    await fetchWithAuth(queueUrl, { method: "POST" });
+
+    // 3) If Spotify drifted into Autoplay/random (not our playlist),
+    // skip once so the queued request becomes next.
+    // (This is the key “snap back” behavior.)
+    try {
+      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+      const state = await st.json();
+
+      const contextUri = state?.context?.uri || "";
+      const isOurPlaylist = (contextUri === PLAYLIST_URI);
+
+      if (!isOurPlaylist) {
+        await fetchWithAuth("https://api.spotify.com/v1/me/player/next", { method: "POST" });
+      }
+    } catch (e) {
+      // If skip fails (some device states), it will still play after current track.
+      console.warn("Skip-next failed (non-fatal):", e);
+    }
+
+    searchMessage.textContent = `Queued + Added: ${track.name}`;
+    await refreshPlaylistView();
+    await refreshNowPlaying();
+  } catch (err) {
+    console.error(err);
+
+    // Most common real-world cause: no active device session.
+    searchMessage.textContent =
+      "Could not queue track. Make sure Spotify is actively playing to your Sonos group, then try again.";
+  }
+}
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
