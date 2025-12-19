@@ -135,6 +135,11 @@
       background: transparent;
       border-color: rgba(148,163,184,0.5);
     }
+    .btn-sm {
+      min-width: 80px;
+      padding: 8px 12px;
+      font-size: .85rem;
+    }
 
     /* NOW PLAYING CARD */
     .now-playing {
@@ -229,6 +234,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 12px;
+      flex-wrap: wrap;
     }
     .panel-title {
       font-size: 1.05rem;
@@ -372,6 +378,12 @@
     }
     .msg.error { color: var(--danger); }
     .msg.success { color: var(--accent-text); }
+    
+    .playlist-controls {
+      display:flex; 
+      gap:8px; 
+      align-items:center;
+    }
   </style>
 </head>
 <body>
@@ -437,9 +449,12 @@
         <div class="panel-header">
           <div>
             <div class="panel-title">Party playlist</div>
-            <div class="panel-subtitle">These tracks are in the shared queue.</div>
+            <div class="panel-subtitle">Shared queue</div>
           </div>
-          <button class="btn btn-ghost" id="refreshPlaylistBtn">Refresh</button>
+          <div class="playlist-controls">
+            <button class="btn btn-primary btn-sm" id="forcePlayBtn">▶ Start JukeBox</button>
+            <button class="btn btn-ghost btn-sm" id="refreshPlaylistBtn">Refresh</button>
+          </div>
         </div>
         <div class="tracks-list" id="playlistView"></div>
         <div class="msg" id="playlistMessage"></div>
@@ -453,8 +468,8 @@
    * CONFIG
    **************************************************************/
   const SPOTIFY_CLIENT_ID = "b48fe08bcf6c448aabe8774fbfdcd943";
-  const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; // must match Spotify app
-  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; // Three Tails Tavern playlist
+  const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; 
+  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; 
   const PLAYLIST_URI = "spotify:playlist:3oHuSCHOpiA2DOOI72uR2f";
 
   // Auto-remove the last played track from the playlist when the song changes
@@ -466,7 +481,7 @@
     "playlist-modify-public",
     "user-read-playback-state",
     "user-read-currently-playing",
-    "user-modify-playback-state" // needed to resume playlist
+    "user-modify-playback-state" 
   ];
 
   let lastSnapshotId = null;
@@ -475,7 +490,7 @@
   let lastTrackUri = null;
 
   /**************************************************************
-   * AUTH + TOKEN HELPERS (PKCE)
+   * AUTH + TOKEN HELPERS
    **************************************************************/
   const authStatusDot = document.getElementById("authStatusDot");
   const authStatusText = document.getElementById("authStatusText");
@@ -533,6 +548,7 @@
     localStorage.removeItem("sj_spotify_tokens");
   }
 
+  // --- API HELPER WITH STANDARD URLS ---
   async function fetchWithAuth(url, options = {}) {
     let tokens = getStoredTokens();
     if (!tokens || !tokens.access_token) {
@@ -684,8 +700,7 @@
     searchResults.innerHTML = "";
 
     try {
-      // FIX: Use correct Spotify search URL
-      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -744,7 +759,7 @@
     searchMessage.textContent = `Adding "${track.name}"…`;
 
     try {
-      // 1) Add to the party playlist (permanent record)
+      // 1) Add to the party playlist
       await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
@@ -753,55 +768,62 @@
         }
       );
 
-      // 2) CHECK PLAYER STATE (The Fix)
-      // We check if we are playing the playlist or if we drifted to Radio.
-      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+      // 2) Try to queue it (default action)
+      const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
+      await fetchWithAuth(queueUrl, { method: "POST" });
       
-      // If 204 No Content, nothing is playing.
-      if (st.status === 204) {
-        searchMessage.textContent = `Added. (Start music on Sonos manually to resume)`;
-        await refreshPlaylistView();
-        return;
-      }
-
-      const state = await st.json();
-      const contextUri = state?.context?.uri || "";
-      const currentDeviceId = state?.device?.id; 
-      const isOurPlaylist = (contextUri === PLAYLIST_URI);
-
-      if (isOurPlaylist) {
-        // SCENARIO A: Music is playing correctly. Just queue the song.
-        const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
-        await fetchWithAuth(queueUrl, { method: "POST" });
-        searchMessage.textContent = `Queued: ${track.name}`;
-
-      } else {
-        // SCENARIO B: We drifted to Radio (or a different album).
-        // We must FORCE SWITCH back to the playlist.
-        if (!currentDeviceId) {
-           searchMessage.textContent = "Added to list (Could not switch Sonos automatically - No Active Device).";
-        } else {
-           // Force Play command
-           await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${currentDeviceId}`, {
-             method: "PUT",
-             body: JSON.stringify({
-               context_uri: PLAYLIST_URI,
-               offset: { uri: track.uri } // Start immediately at the song we just added
-             })
-           });
-           searchMessage.textContent = `Jukebox Restarted: ${track.name}`;
-        }
-      }
+      searchMessage.textContent = `Added & Queued: ${track.name}`;
 
       await refreshPlaylistView();
-      // Wait for the switch to happen then refresh UI
       setTimeout(() => refreshNowPlaying(), 1500);
 
     } catch (err) {
       console.error(err);
-      searchMessage.textContent = "Error communicating with Spotify.";
+      searchMessage.textContent = "Added to playlist. (If on radio, use 'Start Jukebox' button)";
     }
   }
+
+  /**************************************************************
+   * FORCE PLAY BUTTON (The Fix)
+   **************************************************************/
+  const forcePlayBtn = document.getElementById("forcePlayBtn");
+  
+  forcePlayBtn.addEventListener("click", async () => {
+    playlistMessage.textContent = "Attempting to take over Sonos...";
+    
+    try {
+        // 1. Get all devices
+        const devRes = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
+        const devData = await devRes.json();
+        
+        // 2. Find the active device, or just the first available one
+        const activeDevice = devData.devices.find(d => d.is_active);
+        const targetDevice = activeDevice || devData.devices[0];
+
+        if (!targetDevice) {
+            alert("No Spotify devices found. Open Spotify on your Sonos first!");
+            playlistMessage.textContent = "No devices found.";
+            return;
+        }
+
+        // 3. Force Play command to that device
+        await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${targetDevice.id}`, {
+            method: "PUT",
+            body: JSON.stringify({
+                context_uri: PLAYLIST_URI
+            })
+        });
+
+        playlistMessage.textContent = `JukeBox started on ${targetDevice.name}!`;
+        // Refresh UI
+        setTimeout(() => refreshNowPlaying(), 1000);
+
+    } catch (err) {
+        console.error(err);
+        playlistMessage.textContent = "Failed to start JukeBox. Check connection.";
+    }
+  });
+
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
@@ -1046,7 +1068,6 @@
 
       const currentUri = data.item.uri;
       if (AUTO_REMOVE_PLAYED && lastTrackUri && lastTrackUri !== currentUri) {
-        // track changed – try to remove the previous one from the playlist
         removeFirstOccurrenceOfTrack(lastTrackUri);
       }
       lastTrackUri = currentUri;
