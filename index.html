@@ -144,6 +144,11 @@
         color: #fca5a5;
         border-color: rgba(248, 113, 113, 0.4);
     }
+    .btn-debug {
+        background: rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+        border: 1px solid rgba(59, 130, 246, 0.4);
+    }
 
     /* NOW PLAYING CARD */
     .now-playing {
@@ -402,6 +407,7 @@
       display:flex; 
       gap:8px; 
       align-items:center;
+      flex-wrap: wrap;
     }
   </style>
 </head>
@@ -478,6 +484,7 @@
             <div class="panel-subtitle">Shared queue</div>
           </div>
           <div class="playlist-controls">
+            <button class="btn btn-debug btn-sm" id="debugSpeakersBtn">🕵️ List Speakers</button>
             <button class="btn btn-primary btn-sm" id="forcePlayBtn">▶ Start JukeBox</button>
             <button class="btn btn-ghost btn-sm" id="refreshPlaylistBtn">Refresh</button>
           </div>
@@ -713,6 +720,57 @@
   }
 
   /**************************************************************
+   * DEVICE FINDER HELPER (THE FIX)
+   **************************************************************/
+  async function findBestSpeakerDevice() {
+    const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
+    const data = await res.json();
+    const devices = data.devices || [];
+
+    if (devices.length === 0) return null;
+
+    // 1. Filter specifically for SPEAKERS (Exclude Phones/Computers)
+    // Spotify Types: Computer, Smartphone, Speaker, CastAudio, CastVideo, AVR, etc.
+    const speakers = devices.filter(d => 
+        d.type.toLowerCase() === 'speaker' || 
+        d.type.toLowerCase() === 'castaudio' ||
+        d.type.toLowerCase() === 'castvideo' ||
+        d.type.toLowerCase() === 'avr'
+    );
+
+    if (speakers.length === 0) {
+        // We found devices (likely your iPhone) but NO speakers.
+        // Return null so we don't accidentally play on the phone.
+        return null;
+    }
+
+    // 2. Look for "Basement" (Matches "Basement", "Basement + 1", etc.)
+    let target = speakers.find(d => d.name.toLowerCase().includes("basement"));
+
+    // 3. Look for "Family Room"
+    if (!target) {
+        target = speakers.find(d => d.name.toLowerCase().includes("family room"));
+    }
+
+    // 4. Look for "Sonos"
+    if (!target) {
+        target = speakers.find(d => d.name.toLowerCase().includes("sonos"));
+    }
+
+    // 5. Fallback: First Active Speaker
+    if (!target) {
+        target = speakers.find(d => d.is_active);
+    }
+
+    // 6. Last Resort: Any Speaker
+    if (!target) {
+        target = speakers[0];
+    }
+
+    return target;
+  }
+
+  /**************************************************************
    * SEARCH & ADD
    **************************************************************/
   const searchInput = document.getElementById("searchInput");
@@ -802,35 +860,52 @@
       const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
       
       if (st.status === 204) {
-         searchMessage.textContent = "Added. (Nothing playing)";
+         // Nothing playing. Try to start Jukebox on a SPEAKER.
+         const targetDevice = await findBestSpeakerDevice();
+         if (targetDevice) {
+             searchMessage.textContent = `Added. Starting on ${targetDevice.name}...`;
+             await executeSwitch(targetDevice.id, track.uri);
+         } else {
+             searchMessage.textContent = "Added. (No speakers found to auto-start)";
+         }
       } else {
          const state = await st.json();
          const contextUri = state?.context?.uri || "";
          const isOurPlaylist = (contextUri === PLAYLIST_URI);
          
          if (isOurPlaylist) {
-            // SCENARIO A: Already Correct
+            // Already playing correctly. Just queue.
             const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
             await fetchWithAuth(queueUrl, { method: "POST" });
             searchMessage.textContent = `Added & Queued: ${track.name}`;
          } else {
-            // SCENARIO B: DRIFTED -> SMOOTH SWITCH
-            const currentDeviceId = state.device.id;
+            // DRIFTED -> Need to switch back.
+            // BUT FIRST: Ensure we are switching to a SPEAKER, not the iPhone.
+            let targetDeviceId = state.device.id;
             
-            // Calculate delay to wait for current song
+            // If the current active device is a Smartphone, try to find a Speaker instead.
+            if (state.device.type === 'Smartphone' || state.device.type === 'Computer') {
+                const bestSpeaker = await findBestSpeakerDevice();
+                if (bestSpeaker) {
+                    targetDeviceId = bestSpeaker.id;
+                    console.log("Redirecting playback from Phone to Speaker:", bestSpeaker.name);
+                } else {
+                    searchMessage.textContent = "Added. (Could not find Sonos to switch to)";
+                    return; 
+                }
+            }
+            
+            // Calculate delay
             const progress = state.progress_ms || 0;
             const duration = state.item?.duration_ms || 0;
             const remainingMs = duration - progress;
             
             searchMessage.textContent = `Added. JukeBox will resume after this song.`;
-            
-            // Trigger the smooth switch logic
-            initiateSmoothSwitch(currentDeviceId, remainingMs, track.uri);
+            initiateSmoothSwitch(targetDeviceId, remainingMs, track.uri);
          }
       }
 
       await refreshPlaylistView();
-      // setTimeout(() => refreshNowPlaying(), 1500);
 
     } catch (err) {
       console.error(err);
@@ -846,7 +921,6 @@
   const pendingTimer = document.getElementById("pendingTimer");
   const cancelSwitchBtn = document.getElementById("cancelSwitchBtn");
   
-  // Clean up timer
   function cancelSmoothSwitch() {
     if (switchTimer) clearTimeout(switchTimer);
     if (switchInterval) clearInterval(switchInterval);
@@ -866,18 +940,15 @@
   }
 
   async function initiateSmoothSwitch(deviceId, delayMs, specificTrackUri = null) {
-    cancelSmoothSwitch(); // Clear any existing
+    cancelSmoothSwitch(); 
 
-    // If delay is very small (< 2 sec), just go
     if (delayMs < 2000) {
        await executeSwitch(deviceId, specificTrackUri);
        return;
     }
 
-    // Show overlay
     pendingOverlay.style.display = "flex";
     
-    // Start countdown UI
     let timeLeft = delayMs;
     pendingTimer.textContent = formatTime(timeLeft);
     
@@ -887,11 +958,10 @@
       pendingTimer.textContent = formatTime(timeLeft);
     }, 1000);
 
-    // Set actual trigger
     switchTimer = setTimeout(async () => {
       await executeSwitch(deviceId, specificTrackUri);
-      cancelSmoothSwitch(); // Hide UI
-    }, delayMs - 500); // 500ms buffer to catch it right before next track
+      cancelSmoothSwitch(); 
+    }, delayMs - 500); 
   }
   
   async function executeSwitch(deviceId, offsetUri) {
@@ -917,33 +987,13 @@
     playlistMessage.textContent = "Locating Sonos...";
     
     try {
-        // 1. Get Devices first to find the best one
-        const devRes = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
-        const devData = await devRes.json();
-        const devices = devData.devices || [];
+        // 1. Find the best SPEAKER (ignoring phones)
+        const targetDevice = await findBestSpeakerDevice();
 
-        if (devices.length === 0) {
-           alert("No Spotify devices found. Please open Spotify on your Sonos.");
+        if (!targetDevice) {
+           alert("No Sonos/Speakers found.\n\nPlease open the Sonos app and play music for 1 second to wake them up, then try again.");
+           playlistMessage.textContent = "No speakers found.";
            return;
-        }
-
-        // --- SONOS HUNTER LOGIC ---
-        // Priority A: "Basement +1" (Case insensitive)
-        let targetDevice = devices.find(d => d.name.toLowerCase().includes("basement +1"));
-        
-        // Priority B: "Sonos" in name
-        if (!targetDevice) {
-            targetDevice = devices.find(d => d.name.toLowerCase().includes("sonos"));
-        }
-        
-        // Priority C: Active Device
-        if (!targetDevice) {
-            targetDevice = devices.find(d => d.is_active);
-        }
-
-        // Priority D: First available
-        if (!targetDevice) {
-            targetDevice = devices[0];
         }
 
         const deviceId = targetDevice.id;
@@ -959,18 +1009,37 @@
         }
 
         const state = await st.json();
-        
-        // 3. Calculate remaining time
         const progress = state.progress_ms || 0;
         const duration = state.item?.duration_ms || 0;
         const remaining = duration - progress;
         
-        // 4. Initiate Wait
         initiateSmoothSwitch(deviceId, remaining, null);
 
     } catch (err) {
         console.error(err);
         playlistMessage.textContent = "Error checking status.";
+    }
+  });
+
+  /**************************************************************
+   * DEBUG BUTTON
+   **************************************************************/
+  document.getElementById("debugSpeakersBtn").addEventListener("click", async () => {
+    try {
+        const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
+        const data = await res.json();
+        const devices = data.devices || [];
+        
+        if (devices.length === 0) {
+            alert("Spotify found 0 devices.\n\nTip: Open the Sonos app or start playing music manually on your speaker to wake it up.");
+        } else {
+            const list = devices.map(d => 
+                `• ${d.name} [${d.type}] ${d.is_active ? '(Active)' : ''}`
+            ).join("\n");
+            alert("Spotify sees these devices:\n\n" + list);
+        }
+    } catch (err) {
+        alert("Error fetching device list: " + err.message);
     }
   });
 
