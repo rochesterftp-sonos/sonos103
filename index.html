@@ -683,4 +683,602 @@
     body.append("grant_type", "authorization_code");
     body.append("code", code);
     body.append("redirect_uri", REDIRECT_URI);
-    body.append("client_id", SPOTIFY_
+    body.append("client_id", SPOTIFY_CLIENT_ID);
+    body.append("code_verifier", codeVerifier);
+
+    try {
+      const res = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error("Token exchange failed:", txt);
+        alert("Spotify login failed. Check redirect URI and try again.");
+        return;
+      }
+      const data = await res.json();
+      storeTokens(data);
+      localStorage.removeItem("sj_spotify_state");
+      localStorage.removeItem("sj_spotify_verifier");
+      setAuthStatus(true, "Connected");
+      await refreshPlaylistView();
+      await refreshNowPlaying();
+      startNowPlayingPolling();
+    } catch (err) {
+      console.error(err);
+      alert("Error completing Spotify login.");
+    }
+  }
+
+  /**************************************************************
+   * SEARCH & ADD
+   **************************************************************/
+  const searchInput = document.getElementById("searchInput");
+  const searchBtn = document.getElementById("searchBtn");
+  const searchResults = document.getElementById("searchResults");
+  const searchMessage = document.getElementById("searchMessage");
+
+  async function performSearch() {
+    const q = searchInput.value.trim();
+    if (!q) {
+      searchMessage.textContent = "Type something to search.";
+      return;
+    }
+    searchMessage.textContent = "Searching…";
+    searchResults.innerHTML = "";
+
+    try {
+      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
+      const res = await fetchWithAuth(url);
+      const data = await res.json();
+      const tracks = data.tracks?.items || [];
+      if (!tracks.length) {
+        searchMessage.textContent = "No results. Try a different search.";
+        return;
+      }
+      searchMessage.textContent = `Tap ➕ to add a track.`;
+      tracks.forEach((t) => {
+        const row = document.createElement("div");
+        row.className = "track-row";
+
+        const main = document.createElement("div");
+        main.className = "track-main";
+
+        const title = document.createElement("div");
+        title.className = "track-title";
+        title.textContent = t.name;
+
+        const sub = document.createElement("div");
+        sub.className = "track-sub";
+        const artistNames = t.artists.map((a) => a.name).join(", ");
+        sub.textContent = `${artistNames} • ${t.album.name}`;
+
+        main.appendChild(title);
+        main.appendChild(sub);
+
+        const right = document.createElement("div");
+        right.className = "track-right";
+
+        const addBtn = document.createElement("button");
+        addBtn.className = "btn-icon btn-add";
+        addBtn.innerHTML = "➕ Add";
+        addBtn.onclick = (e) => {
+          e.stopPropagation();
+          addTrackToParty(t);
+        };
+
+        right.appendChild(addBtn);
+        row.appendChild(main);
+        row.appendChild(right);
+        searchResults.appendChild(row);
+      });
+    } catch (err) {
+      console.error(err);
+      searchMessage.textContent = "Error talking to Spotify. Try reconnecting.";
+    }
+  }
+
+  async function addTrackToParty(track) {
+    if (!PARTY_PLAYLIST_ID) {
+      alert("Playlist ID not set.");
+      return;
+    }
+
+    searchMessage.textContent = `Adding "${track.name}"…`;
+
+    try {
+      // 1) Add to the party playlist
+      await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+        {
+          method: "POST",
+          body: JSON.stringify({ uris: [track.uri] }),
+        }
+      );
+
+      // 2) Check if we need to switch (Drift Logic)
+      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+      
+      if (st.status === 204) {
+         searchMessage.textContent = "Added. (Nothing playing)";
+      } else {
+         const state = await st.json();
+         const contextUri = state?.context?.uri || "";
+         const isOurPlaylist = (contextUri === PLAYLIST_URI);
+         
+         if (isOurPlaylist) {
+            // SCENARIO A: Already Correct
+            const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
+            await fetchWithAuth(queueUrl, { method: "POST" });
+            searchMessage.textContent = `Added & Queued: ${track.name}`;
+         } else {
+            // SCENARIO B: DRIFTED -> SMOOTH SWITCH
+            const currentDeviceId = state.device.id;
+            
+            // Calculate delay to wait for current song
+            const progress = state.progress_ms || 0;
+            const duration = state.item?.duration_ms || 0;
+            const remainingMs = duration - progress;
+            
+            searchMessage.textContent = `Added. JukeBox will resume after this song.`;
+            
+            // Trigger the smooth switch logic
+            initiateSmoothSwitch(currentDeviceId, remainingMs, track.uri);
+         }
+      }
+
+      await refreshPlaylistView();
+      // setTimeout(() => refreshNowPlaying(), 1500);
+
+    } catch (err) {
+      console.error(err);
+      searchMessage.textContent = "Added to playlist.";
+    }
+  }
+
+  /**************************************************************
+   * FORCE PLAY BUTTON (SMOOTH SWITCH LOGIC)
+   **************************************************************/
+  const forcePlayBtn = document.getElementById("forcePlayBtn");
+  const pendingOverlay = document.getElementById("pendingOverlay");
+  const pendingTimer = document.getElementById("pendingTimer");
+  const cancelSwitchBtn = document.getElementById("cancelSwitchBtn");
+  
+  // Clean up timer
+  function cancelSmoothSwitch() {
+    if (switchTimer) clearTimeout(switchTimer);
+    if (switchInterval) clearInterval(switchInterval);
+    switchTimer = null;
+    switchInterval = null;
+    pendingOverlay.style.display = "none";
+    playlistMessage.textContent = "Switch cancelled.";
+  }
+  
+  cancelSwitchBtn.addEventListener("click", cancelSmoothSwitch);
+
+  function formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  async function initiateSmoothSwitch(deviceId, delayMs, specificTrackUri = null) {
+    cancelSmoothSwitch(); // Clear any existing
+
+    // If delay is very small (< 2 sec), just go
+    if (delayMs < 2000) {
+       await executeSwitch(deviceId, specificTrackUri);
+       return;
+    }
+
+    // Show overlay
+    pendingOverlay.style.display = "flex";
+    
+    // Start countdown UI
+    let timeLeft = delayMs;
+    pendingTimer.textContent = formatTime(timeLeft);
+    
+    switchInterval = setInterval(() => {
+      timeLeft -= 1000;
+      if (timeLeft < 0) timeLeft = 0;
+      pendingTimer.textContent = formatTime(timeLeft);
+    }, 1000);
+
+    // Set actual trigger
+    switchTimer = setTimeout(async () => {
+      await executeSwitch(deviceId, specificTrackUri);
+      cancelSmoothSwitch(); // Hide UI
+    }, delayMs - 500); // 500ms buffer to catch it right before next track
+  }
+  
+  async function executeSwitch(deviceId, offsetUri) {
+     try {
+        const body = { context_uri: PLAYLIST_URI };
+        if (offsetUri) {
+           body.offset = { uri: offsetUri };
+        }
+        
+        await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+            method: "PUT",
+            body: JSON.stringify(body)
+        });
+        playlistMessage.textContent = "Jukebox Started!";
+        setTimeout(refreshNowPlaying, 1000);
+     } catch(e) {
+        console.error("Switch failed", e);
+        playlistMessage.textContent = "Failed to switch.";
+     }
+  }
+
+  forcePlayBtn.addEventListener("click", async () => {
+    playlistMessage.textContent = "Locating Sonos...";
+    
+    try {
+        // 1. Get Devices first to find the best one
+        const devRes = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
+        const devData = await devRes.json();
+        const devices = devData.devices || [];
+
+        if (devices.length === 0) {
+           alert("No Spotify devices found. Please open Spotify on your Sonos.");
+           return;
+        }
+
+        // --- SONOS HUNTER LOGIC ---
+        // Priority A: "Basement +1" (Case insensitive)
+        let targetDevice = devices.find(d => d.name.toLowerCase().includes("basement +1"));
+        
+        // Priority B: "Sonos" in name
+        if (!targetDevice) {
+            targetDevice = devices.find(d => d.name.toLowerCase().includes("sonos"));
+        }
+        
+        // Priority C: Active Device
+        if (!targetDevice) {
+            targetDevice = devices.find(d => d.is_active);
+        }
+
+        // Priority D: First available
+        if (!targetDevice) {
+            targetDevice = devices[0];
+        }
+
+        const deviceId = targetDevice.id;
+        playlistMessage.textContent = `Found: ${targetDevice.name}. Checking status...`;
+
+        // 2. Get Player State to calculate delay
+        const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+        
+        if (st.status === 204) {
+             // Nothing playing -> Start immediately
+             await executeSwitch(deviceId, null);
+             return;
+        }
+
+        const state = await st.json();
+        
+        // 3. Calculate remaining time
+        const progress = state.progress_ms || 0;
+        const duration = state.item?.duration_ms || 0;
+        const remaining = duration - progress;
+        
+        // 4. Initiate Wait
+        initiateSmoothSwitch(deviceId, remaining, null);
+
+    } catch (err) {
+        console.error(err);
+        playlistMessage.textContent = "Error checking status.";
+    }
+  });
+
+
+  /**************************************************************
+   * PLAYLIST VIEW + REMOVE + REORDER
+   **************************************************************/
+  const playlistView = document.getElementById("playlistView");
+  const playlistMessage = document.getElementById("playlistMessage");
+  const refreshPlaylistBtn = document.getElementById("refreshPlaylistBtn");
+
+  async function refreshPlaylistView() {
+    playlistView.innerHTML = "";
+    playlistMessage.textContent = "Loading playlist…";
+
+    if (!PARTY_PLAYLIST_ID) {
+      playlistMessage.textContent = "Playlist ID missing.";
+      return;
+    }
+
+    try {
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
+      );
+      const data = await res.json();
+
+      lastSnapshotId = data.snapshot_id || null;
+      const name = data.name || "Party playlist";
+      const tracks = data.tracks?.items || [];
+
+      playlistMessage.textContent = `${name} – ${tracks.length} track(s)`;
+
+      if (!tracks.length) {
+        const empty = document.createElement("div");
+        empty.className = "msg";
+        empty.textContent = "Playlist is empty. Add something on the left.";
+        playlistView.appendChild(empty);
+        return;
+      }
+
+      tracks.forEach((item, index) => {
+        const t = item.track;
+        if (!t) return;
+
+        const row = document.createElement("div");
+        row.className = "track-row";
+
+        const main = document.createElement("div");
+        main.className = "track-main";
+
+        const title = document.createElement("div");
+        title.className = "track-title";
+        title.textContent = `${index + 1}. ${t.name}`;
+
+        const sub = document.createElement("div");
+        sub.className = "track-sub";
+        const artistNames = t.artists.map((a) => a.name).join(", ");
+        sub.textContent = `${artistNames} • ${t.album.name}`;
+
+        main.appendChild(title);
+        main.appendChild(sub);
+
+        const right = document.createElement("div");
+        right.className = "track-right";
+
+        const reorderRow = document.createElement("div");
+        reorderRow.className = "track-reorder";
+
+        const upBtn = document.createElement("button");
+        upBtn.className = "btn-mini";
+        upBtn.textContent = "↑";
+        upBtn.disabled = index === 0;
+        upBtn.onclick = (e) => {
+          e.stopPropagation();
+          moveTrack(index, -1);
+        };
+
+        const downBtn = document.createElement("button");
+        downBtn.className = "btn-mini";
+        downBtn.textContent = "↓";
+        downBtn.disabled = index === tracks.length - 1;
+        downBtn.onclick = (e) => {
+          e.stopPropagation();
+          moveTrack(index, +1);
+        };
+
+        reorderRow.appendChild(upBtn);
+        reorderRow.appendChild(downBtn);
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "btn-icon btn-remove";
+        removeBtn.innerHTML = "🗑 Remove";
+        removeBtn.onclick = (e) => {
+          e.stopPropagation();
+          removeTrackFromParty(index, t.uri);
+        };
+
+        right.appendChild(reorderRow);
+        right.appendChild(removeBtn);
+
+        row.appendChild(main);
+        row.appendChild(right);
+        playlistView.appendChild(row);
+      });
+    } catch (err) {
+      console.error(err);
+      playlistMessage.textContent = "Error loading playlist.";
+    }
+  }
+
+  async function moveTrack(position, delta) {
+    if (lastSnapshotId === null) {
+      alert("Playlist state not ready yet.");
+      return;
+    }
+    const range_start = position;
+    const insert_before = position + delta + (delta > 0 ? 1 : 0);
+
+    try {
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            range_start,
+            range_length: 1,
+            insert_before,
+            snapshot_id: lastSnapshotId,
+          }),
+        }
+      );
+      const data = await res.json();
+      lastSnapshotId = data.snapshot_id || lastSnapshotId;
+      await refreshPlaylistView();
+    } catch (err) {
+      console.error("Reorder error:", err);
+      playlistMessage.textContent = "Error reordering tracks.";
+    }
+  }
+
+  async function removeTrackFromParty(position, uri, skipConfirm = false) {
+    if (!PARTY_PLAYLIST_ID || lastSnapshotId === null) {
+      return;
+    }
+    if (!skipConfirm) {
+      const confirmRemove = confirm("Remove this track from the party playlist?");
+      if (!confirmRemove) return;
+    }
+
+    try {
+      const body = {
+        tracks: [{ uri: uri, positions: [position] }],
+        snapshot_id: lastSnapshotId
+      };
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+        {
+          method: "DELETE",
+          body: JSON.stringify(body),
+        }
+      );
+      const data = await res.json();
+      lastSnapshotId = data.snapshot_id || lastSnapshotId;
+      await refreshPlaylistView();
+    } catch (err) {
+      console.error("Error removing track:", err);
+      playlistMessage.textContent = "Error removing track.";
+    }
+  }
+
+  async function removeFirstOccurrenceOfTrack(uri) {
+    try {
+      const res = await fetchWithAuth(
+        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
+      );
+      const data = await res.json();
+      lastSnapshotId = data.snapshot_id || lastSnapshotId;
+      const items = data.tracks?.items || [];
+      const idx = items.findIndex(it => it.track && it.track.uri === uri);
+      if (idx === -1) return;
+      await removeTrackFromParty(idx, uri, true);
+    } catch (err) {
+      console.error("Auto-remove error:", err);
+    }
+  }
+
+  /**************************************************************
+   * NOW PLAYING (READ-ONLY)
+   **************************************************************/
+  const nowPlayingArt = document.getElementById("nowPlayingArt");
+  const nowPlayingTitle = document.getElementById("nowPlayingTitle");
+  const nowPlayingArtist = document.getElementById("nowPlayingArtist");
+  const nowPlayingDevice = document.getElementById("nowPlayingDevice");
+  const nowPlayingStatus = document.getElementById("nowPlayingStatus");
+
+  function renderEmptyNowPlaying() {
+    nowPlaying = null;
+    nowPlayingArt.style.backgroundImage = "none";
+    nowPlayingTitle.textContent = "Not playing";
+    nowPlayingArtist.textContent = "Start music from Spotify and select your Sonos group.";
+    nowPlayingDevice.textContent = "";
+    nowPlayingStatus.textContent = "";
+  }
+
+  function renderNowPlaying(data) {
+    nowPlaying = data;
+
+    const item = data.item;
+    if (!item) {
+      renderEmptyNowPlaying();
+      return;
+    }
+
+    const img = (item.album.images && item.album.images[0]) || null;
+    if (img) {
+      nowPlayingArt.style.backgroundImage = `url("${img.url}")`;
+    } else {
+      nowPlayingArt.style.backgroundImage = "none";
+    }
+
+    const artistNames = item.artists.map(a => a.name).join(", ");
+
+    nowPlayingTitle.textContent = item.name || "Unknown track";
+    nowPlayingArtist.textContent = artistNames || "";
+    nowPlayingDevice.textContent = data.device && data.device.name
+      ? `Device: ${data.device.name}`
+      : "";
+    nowPlayingStatus.textContent = data.is_playing ? "Playing" : "Paused";
+  }
+
+  async function refreshNowPlaying() {
+    try {
+      const res = await fetchWithAuth(
+        "https://api.spotify.com/v1/me/player"
+      );
+      if (res.status === 204) {
+        renderEmptyNowPlaying();
+        return;
+      }
+      const data = await res.json();
+      if (!data || !data.item) {
+        renderEmptyNowPlaying();
+        return;
+      }
+
+      const currentUri = data.item.uri;
+      if (AUTO_REMOVE_PLAYED && lastTrackUri && lastTrackUri !== currentUri) {
+        removeFirstOccurrenceOfTrack(lastTrackUri);
+      }
+      lastTrackUri = currentUri;
+
+      renderNowPlaying(data);
+    } catch (err) {
+      console.error("Now playing error:", err);
+      renderEmptyNowPlaying();
+    }
+  }
+
+  function startNowPlayingPolling() {
+    stopNowPlayingPolling();
+    nowPlayingIntervalId = setInterval(() => {
+      refreshNowPlaying().catch(() => {});
+    }, 15000); // every 15s
+  }
+
+  function stopNowPlayingPolling() {
+    if (nowPlayingIntervalId) {
+      clearInterval(nowPlayingIntervalId);
+      nowPlayingIntervalId = null;
+    }
+  }
+
+  /**************************************************************
+   * EVENTS & INIT
+   **************************************************************/
+  loginBtn.addEventListener("click", beginSpotifyLogin);
+  logoutBtn.addEventListener("click", () => {
+    clearTokens();
+    setAuthStatus(false, "Not connected");
+    searchResults.innerHTML = "";
+    playlistView.innerHTML = "";
+    searchMessage.textContent = "";
+    playlistMessage.textContent = "";
+    renderEmptyNowPlaying();
+    stopNowPlayingPolling();
+  });
+
+  searchBtn.addEventListener("click", performSearch);
+  searchInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") performSearch();
+  });
+  refreshPlaylistBtn.addEventListener("click", refreshPlaylistView);
+
+  (async function init() {
+    renderEmptyNowPlaying();
+    const tokens = getStoredTokens();
+    if (tokens && tokens.access_token) {
+      setAuthStatus(true, "Connected");
+      try {
+        await refreshPlaylistView();
+        await refreshNowPlaying();
+        startNowPlayingPolling();
+      } catch {}
+    } else {
+      setAuthStatus(false, "Not connected");
+    }
+    await handleAuthCallback();
+  })();
+</script>
+</body>
+</html>
