@@ -700,7 +700,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -779,34 +779,52 @@
 
     } catch (err) {
       console.error(err);
-      searchMessage.textContent = "Added to playlist. (If on radio, use 'Start Jukebox' button)";
+      searchMessage.textContent = "Added. (If stalled, tap 'Start JukeBox')";
     }
   }
 
   /**************************************************************
-   * FORCE PLAY BUTTON (The Fix)
+   * FORCE PLAY BUTTON (FIXED: SONOS HUNTER)
    **************************************************************/
   const forcePlayBtn = document.getElementById("forcePlayBtn");
   
   forcePlayBtn.addEventListener("click", async () => {
-    playlistMessage.textContent = "Attempting to take over Sonos...";
+    playlistMessage.textContent = "Searching for Sonos...";
     
     try {
         // 1. Get all devices
         const devRes = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
         const devData = await devRes.json();
-        
-        // 2. Find the active device, or just the first available one
-        const activeDevice = devData.devices.find(d => d.is_active);
-        const targetDevice = activeDevice || devData.devices[0];
+        const devices = devData.devices || [];
 
-        if (!targetDevice) {
+        if (devices.length === 0) {
             alert("No Spotify devices found. Open Spotify on your Sonos first!");
             playlistMessage.textContent = "No devices found.";
             return;
         }
 
-        // 3. Force Play command to that device
+        // 2. SONOS HUNTER LOGIC
+        // Priority A: "Sonos" in the name
+        let targetDevice = devices.find(d => d.name.toLowerCase().includes("sonos"));
+        
+        // Priority B: Device Type is "Speaker"
+        if (!targetDevice) {
+            targetDevice = devices.find(d => d.type === "Speaker");
+        }
+
+        // Priority C: Currently Active Device
+        if (!targetDevice) {
+            targetDevice = devices.find(d => d.is_active);
+        }
+
+        // Priority D: Just take the first one
+        if (!targetDevice) {
+            targetDevice = devices[0];
+        }
+
+        console.log("Selected device:", targetDevice.name, targetDevice.id);
+
+        // 3. Force Play command to that SPECIFIC device
         await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${targetDevice.id}`, {
             method: "PUT",
             body: JSON.stringify({
@@ -814,9 +832,9 @@
             })
         });
 
-        playlistMessage.textContent = `JukeBox started on ${targetDevice.name}!`;
+        playlistMessage.textContent = `JukeBox started on: ${targetDevice.name}`;
         // Refresh UI
-        setTimeout(() => refreshNowPlaying(), 1000);
+        setTimeout(() => refreshNowPlaying(), 1500);
 
     } catch (err) {
         console.error(err);
@@ -898,237 +916,4 @@
           moveTrack(index, -1);
         };
 
-        const downBtn = document.createElement("button");
-        downBtn.className = "btn-mini";
-        downBtn.textContent = "↓";
-        downBtn.disabled = index === tracks.length - 1;
-        downBtn.onclick = (e) => {
-          e.stopPropagation();
-          moveTrack(index, +1);
-        };
-
-        reorderRow.appendChild(upBtn);
-        reorderRow.appendChild(downBtn);
-
-        const removeBtn = document.createElement("button");
-        removeBtn.className = "btn-icon btn-remove";
-        removeBtn.innerHTML = "🗑 Remove";
-        removeBtn.onclick = (e) => {
-          e.stopPropagation();
-          removeTrackFromParty(index, t.uri);
-        };
-
-        right.appendChild(reorderRow);
-        right.appendChild(removeBtn);
-
-        row.appendChild(main);
-        row.appendChild(right);
-        playlistView.appendChild(row);
-      });
-    } catch (err) {
-      console.error(err);
-      playlistMessage.textContent = "Error loading playlist.";
-    }
-  }
-
-  async function moveTrack(position, delta) {
-    if (lastSnapshotId === null) {
-      alert("Playlist state not ready yet.");
-      return;
-    }
-    const range_start = position;
-    const insert_before = position + delta + (delta > 0 ? 1 : 0);
-
-    try {
-      const res = await fetchWithAuth(
-        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            range_start,
-            range_length: 1,
-            insert_before,
-            snapshot_id: lastSnapshotId,
-          }),
-        }
-      );
-      const data = await res.json();
-      lastSnapshotId = data.snapshot_id || lastSnapshotId;
-      await refreshPlaylistView();
-    } catch (err) {
-      console.error("Reorder error:", err);
-      playlistMessage.textContent = "Error reordering tracks.";
-    }
-  }
-
-  async function removeTrackFromParty(position, uri, skipConfirm = false) {
-    if (!PARTY_PLAYLIST_ID || lastSnapshotId === null) {
-      return;
-    }
-    if (!skipConfirm) {
-      const confirmRemove = confirm("Remove this track from the party playlist?");
-      if (!confirmRemove) return;
-    }
-
-    try {
-      const body = {
-        tracks: [{ uri: uri, positions: [position] }],
-        snapshot_id: lastSnapshotId
-      };
-      const res = await fetchWithAuth(
-        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
-        {
-          method: "DELETE",
-          body: JSON.stringify(body),
-        }
-      );
-      const data = await res.json();
-      lastSnapshotId = data.snapshot_id || lastSnapshotId;
-      await refreshPlaylistView();
-    } catch (err) {
-      console.error("Error removing track:", err);
-      playlistMessage.textContent = "Error removing track.";
-    }
-  }
-
-  async function removeFirstOccurrenceOfTrack(uri) {
-    try {
-      const res = await fetchWithAuth(
-        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}`
-      );
-      const data = await res.json();
-      lastSnapshotId = data.snapshot_id || lastSnapshotId;
-      const items = data.tracks?.items || [];
-      const idx = items.findIndex(it => it.track && it.track.uri === uri);
-      if (idx === -1) return;
-      await removeTrackFromParty(idx, uri, true);
-    } catch (err) {
-      console.error("Auto-remove error:", err);
-    }
-  }
-
-  /**************************************************************
-   * NOW PLAYING (READ-ONLY)
-   **************************************************************/
-  const nowPlayingArt = document.getElementById("nowPlayingArt");
-  const nowPlayingTitle = document.getElementById("nowPlayingTitle");
-  const nowPlayingArtist = document.getElementById("nowPlayingArtist");
-  const nowPlayingDevice = document.getElementById("nowPlayingDevice");
-  const nowPlayingStatus = document.getElementById("nowPlayingStatus");
-
-  function renderEmptyNowPlaying() {
-    nowPlaying = null;
-    nowPlayingArt.style.backgroundImage = "none";
-    nowPlayingTitle.textContent = "Not playing";
-    nowPlayingArtist.textContent = "Start music from Spotify and select your Sonos group.";
-    nowPlayingDevice.textContent = "";
-    nowPlayingStatus.textContent = "";
-  }
-
-  function renderNowPlaying(data) {
-    nowPlaying = data;
-
-    const item = data.item;
-    if (!item) {
-      renderEmptyNowPlaying();
-      return;
-    }
-
-    const img = (item.album.images && item.album.images[0]) || null;
-    if (img) {
-      nowPlayingArt.style.backgroundImage = `url("${img.url}")`;
-    } else {
-      nowPlayingArt.style.backgroundImage = "none";
-    }
-
-    const artistNames = item.artists.map(a => a.name).join(", ");
-
-    nowPlayingTitle.textContent = item.name || "Unknown track";
-    nowPlayingArtist.textContent = artistNames || "";
-    nowPlayingDevice.textContent = data.device && data.device.name
-      ? `Device: ${data.device.name}`
-      : "";
-    nowPlayingStatus.textContent = data.is_playing ? "Playing" : "Paused";
-  }
-
-  async function refreshNowPlaying() {
-    try {
-      const res = await fetchWithAuth(
-        "https://api.spotify.com/v1/me/player"
-      );
-      if (res.status === 204) {
-        renderEmptyNowPlaying();
-        return;
-      }
-      const data = await res.json();
-      if (!data || !data.item) {
-        renderEmptyNowPlaying();
-        return;
-      }
-
-      const currentUri = data.item.uri;
-      if (AUTO_REMOVE_PLAYED && lastTrackUri && lastTrackUri !== currentUri) {
-        removeFirstOccurrenceOfTrack(lastTrackUri);
-      }
-      lastTrackUri = currentUri;
-
-      renderNowPlaying(data);
-    } catch (err) {
-      console.error("Now playing error:", err);
-      renderEmptyNowPlaying();
-    }
-  }
-
-  function startNowPlayingPolling() {
-    stopNowPlayingPolling();
-    nowPlayingIntervalId = setInterval(() => {
-      refreshNowPlaying().catch(() => {});
-    }, 15000); // every 15s
-  }
-
-  function stopNowPlayingPolling() {
-    if (nowPlayingIntervalId) {
-      clearInterval(nowPlayingIntervalId);
-      nowPlayingIntervalId = null;
-    }
-  }
-
-  /**************************************************************
-   * EVENTS & INIT
-   **************************************************************/
-  loginBtn.addEventListener("click", beginSpotifyLogin);
-  logoutBtn.addEventListener("click", () => {
-    clearTokens();
-    setAuthStatus(false, "Not connected");
-    searchResults.innerHTML = "";
-    playlistView.innerHTML = "";
-    searchMessage.textContent = "";
-    playlistMessage.textContent = "";
-    renderEmptyNowPlaying();
-    stopNowPlayingPolling();
-  });
-
-  searchBtn.addEventListener("click", performSearch);
-  searchInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") performSearch();
-  });
-  refreshPlaylistBtn.addEventListener("click", refreshPlaylistView);
-
-  (async function init() {
-    renderEmptyNowPlaying();
-    const tokens = getStoredTokens();
-    if (tokens && tokens.access_token) {
-      setAuthStatus(true, "Connected");
-      try {
-        await refreshPlaylistView();
-        await refreshNowPlaying();
-        startNowPlayingPolling();
-      } catch {}
-    } else {
-      setAuthStatus(false, "Not connected");
-    }
-    await handleAuthCallback();
-  })();
-</script>
-</body>
-</html>
+        const downBtn = document
