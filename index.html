@@ -590,7 +590,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v1.8"; 
+  const VERSION_NUM = "v1.9"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -617,27 +617,22 @@
     PARTY_PLAYLIST_ID = localStorage.getItem("sj_playlist_id") || "";
     APP_TITLE = localStorage.getItem("sj_app_title") || "Social JukeBox";
     
-    // Default Speaker List
     SPEAKER_NAMES = localStorage.getItem("sj_speaker_names") || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     
-    // Set UI Title
     appTitleDisplay.textContent = `🎧 ${APP_TITLE}`;
     
-    // Clean playlist ID if it contains 'spotify:playlist:'
     if (PARTY_PLAYLIST_ID.includes(":")) {
         PARTY_PLAYLIST_ID = PARTY_PLAYLIST_ID.split(":").pop();
     }
     
     PLAYLIST_URI = `spotify:playlist:${PARTY_PLAYLIST_ID}`;
 
-    // Populate Settings Fields
     cfgClientId.value = SPOTIFY_CLIENT_ID;
     cfgRedirect.value = REDIRECT_URI;
     cfgPlaylistId.value = PARTY_PLAYLIST_ID;
     cfgAppTitle.value = APP_TITLE;
     cfgSpeakerNames.value = SPEAKER_NAMES;
     
-    // Set Version text
     versionText.textContent = `Version: ${VERSION_NUM}`;
 
     if (!SPOTIFY_CLIENT_ID || !REDIRECT_URI || !PARTY_PLAYLIST_ID) {
@@ -665,7 +660,6 @@
     settingsModal.style.display = "flex";
   });
 
-  // Auto-remove the last played track from the playlist when the song changes
   const AUTO_REMOVE_PLAYED = true;
 
   const SPOTIFY_SCOPES = [
@@ -682,7 +676,6 @@
   let nowPlayingIntervalId = null;
   let lastTrackUri = null;
   
-  // For Smooth Switching
   let switchTimer = null;
   let switchInterval = null;
 
@@ -745,7 +738,6 @@
     localStorage.removeItem("sj_spotify_tokens");
   }
 
-  // --- API HELPER WITH STANDARD URLS ---
   async function fetchWithAuth(url, options = {}) {
     let tokens = getStoredTokens();
     if (!tokens || !tokens.access_token) {
@@ -839,7 +831,6 @@
 
     if (!code) return;
 
-    // We need REDIRECT_URI to perform the swap
     if (!REDIRECT_URI) loadSettings();
 
     window.history.replaceState({}, document.title, REDIRECT_URI);
@@ -888,63 +879,40 @@
   }
 
   /**************************************************************
-   * DEVICE FINDER HELPER (DOUBLE CHECK METHOD)
+   * DEVICE FINDER HELPER (V1.9 STRICT SPEAKER PRIORITY)
    **************************************************************/
   async function findBestSpeakerDevice() {
-    // PHASE 1: Check "What is currently playing?"
-    try {
-        const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-        if (playRes.status === 200) { 
-            const playData = await playRes.json();
-            const d = playData.device;
-            if (d && !isPhoneOrComputer(d)) {
-                console.log("Found Active Speaker via Playback State:", d.name);
-                return d;
-            }
-        }
-    } catch (e) {
-        console.warn("Could not check active playback:", e);
-    }
-
-    // PHASE 2: Check the "Available Devices" List
     const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
     const data = await res.json();
     const devices = data.devices || [];
 
     if (devices.length === 0) return null;
 
-    // Parse User's Speaker List
+    // 1. Separate Speakers from Phones/Computers
+    const speakers = devices.filter(d => !isPhoneOrComputer(d));
+    const nonSpeakers = devices.filter(d => isPhoneOrComputer(d));
+
+    // 2. Parse User's Speaker List
     const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     
-    // 1. Try to find an ACTIVE device that matches our allowed names
-    let target = devices.find(d => {
-        if (isPhoneOrComputer(d)) return false;
-        const n = d.name.toLowerCase();
-        return d.is_active && allowedNames.some(k => n.includes(k));
-    });
-    if (target) return target;
-
-    // 2. Try to find ANY active speaker
-    target = devices.find(d => d.is_active && !isPhoneOrComputer(d));
-    if (target) return target;
-
-    // 3. Fallback to IDLE devices matching names
-    target = devices.find(d => {
-        if (isPhoneOrComputer(d)) return false;
+    // 3. PRIORITY 1: Match Name in SPEAKER list (Active or Inactive)
+    // We prefer a matching SPEAKER over an active PHONE.
+    let target = speakers.find(d => {
         const n = d.name.toLowerCase();
         return allowedNames.some(k => n.includes(k));
     });
     if (target) return target;
 
-    // 4. Fallback to any idle speaker
-    target = devices.find(d => {
-        if (isPhoneOrComputer(d)) return false;
-        const type = d.type.toLowerCase();
-        return type === 'speaker' || type === 'castaudio' || type === 'avr' || type === 'audio_dongle';
-    });
+    // 4. PRIORITY 2: Any SPEAKER (Active preferred)
+    target = speakers.find(d => d.is_active);
+    if (target) return target;
+    
+    // 5. PRIORITY 3: Any SPEAKER (Inactive)
+    if (speakers.length > 0) return speakers[0];
 
-    return target || null;
+    // 6. LAST RESORT: Phone/Computer (only if no speakers found)
+    return nonSpeakers[0] || null;
   }
 
   function isPhoneOrComputer(d) {
@@ -973,7 +941,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -1073,10 +1041,10 @@
          if (contextUri !== PLAYLIST_URI) {
             // DRIFTED -> Switch back
             let targetDeviceId = state.device.id;
-            if (isPhoneOrComputer(state.device)) {
-                const bestSpeaker = await findBestSpeakerDevice();
-                if (bestSpeaker) targetDeviceId = bestSpeaker.id;
-            }
+            
+            // Re-evaluate best device (in case we are on phone)
+            const bestDevice = await findBestSpeakerDevice();
+            if (bestDevice) targetDeviceId = bestDevice.id;
             
             const progress = state.progress_ms || 0;
             const duration = state.item?.duration_ms || 0;
@@ -1147,15 +1115,15 @@
   
   async function executeSwitch(deviceId, offsetUri) {
      try {
-        // AGGRESSIVE SWITCH:
-        // 1. Transfer Playback + PAUSE (Breaks radio connection)
+        // AGGRESSIVE SWITCH (V1.9 "Wake Up"):
+        // 1. Transfer Playback + PLAY TRUE (Force Wake)
         await fetchWithAuth("https://api.spotify.com/v1/me/player", {
             method: "PUT",
-            body: JSON.stringify({ device_ids: [deviceId], play: false })
+            body: JSON.stringify({ device_ids: [deviceId], play: true })
         });
 
-        // 2. Wait for Transfer
-        await new Promise(r => setTimeout(r, 500));
+        // 2. Wait 1 Second for device to wake
+        await new Promise(r => setTimeout(r, 1000));
 
         // 3. Play Playlist
         const body = { context_uri: PLAYLIST_URI };
@@ -1188,7 +1156,7 @@
         }
 
         const deviceId = targetDevice.id;
-        playlistMessage.textContent = `Found: ${targetDevice.name}. Checking status...`;
+        playlistMessage.textContent = `Targeting: ${targetDevice.name}`;
 
         const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
         
