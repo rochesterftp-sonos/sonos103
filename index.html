@@ -598,7 +598,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.0"; 
+  const VERSION_NUM = "v2.1"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -892,55 +892,34 @@
    * DEVICE FINDER HELPER
    **************************************************************/
   async function findBestSpeakerDevice() {
-    try {
-        const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-        if (playRes.status === 200) { 
-            const playData = await playRes.json();
-            const d = playData.device;
-            if (d && !isPhoneOrComputer(d)) {
-                console.log("Found Active Speaker:", d.name);
-                return d;
-            }
-        }
-    } catch (e) {}
-
     const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
     const data = await res.json();
     const devices = data.devices || [];
 
     if (devices.length === 0) return null;
 
-    const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos";
+    const speakers = devices.filter(d => !isPhoneOrComputer(d));
+    const nonSpeakers = devices.filter(d => isPhoneOrComputer(d));
+
+    const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     
-    // 1. ACTIVE matching device
-    let target = devices.find(d => {
-        if (isPhoneOrComputer(d)) return false;
-        const n = d.name.toLowerCase();
-        return d.is_active && allowedNames.some(k => n.includes(k));
-    });
-    if (target) return target;
-
-    // 2. ACTIVE any speaker
-    target = devices.find(d => d.is_active && !isPhoneOrComputer(d));
-    if (target) return target;
-
-    // 3. IDLE matching device
-    target = devices.find(d => {
-        if (isPhoneOrComputer(d)) return false;
+    // 1. PRIORITY: Match Name in SPEAKER list (Active or Inactive)
+    let target = speakers.find(d => {
         const n = d.name.toLowerCase();
         return allowedNames.some(k => n.includes(k));
     });
     if (target) return target;
 
-    // 4. Any idle speaker
-    target = devices.find(d => {
-        if (isPhoneOrComputer(d)) return false;
-        const type = d.type.toLowerCase();
-        return type === 'speaker' || type === 'castaudio' || type === 'avr' || type === 'audio_dongle';
-    });
+    // 2. PRIORITY: Any Active Speaker
+    target = speakers.find(d => d.is_active);
+    if (target) return target;
+    
+    // 3. PRIORITY: Any Inactive Speaker
+    if (speakers.length > 0) return speakers[0];
 
-    return target || null;
+    // 4. LAST RESORT: Phone
+    return nonSpeakers[0] || null;
   }
 
   function isPhoneOrComputer(d) {
@@ -969,7 +948,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -1025,9 +1004,11 @@
       return;
     }
 
+    // --- VISUAL POP EFFECT ---
     searchMessage.textContent = `Adding "${track.name}"...`;
     
     try {
+      // 1) CRITICAL: Add to the party playlist
       await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
@@ -1036,6 +1017,7 @@
         }
       );
       
+      // SUCCESS: Show visual confirmation immediately
       searchMessage.textContent = `🎉 Added "${track.name}"!`;
       searchMessage.classList.add("pop");
       searchInput.value = "";
@@ -1049,12 +1031,14 @@
     } catch (err) {
       console.error(err);
       searchMessage.textContent = "Failed to add track. Check connection.";
-      return; 
+      return; // Stop here if failed
     }
 
+    // 2) NON-CRITICAL: Player State & Drift Logic
     try {
       const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
       if (st.status === 204) {
+         // Nothing playing -> Try start
          const targetDevice = await findBestSpeakerDevice();
          if (targetDevice) await executeSwitch(targetDevice.id, track.uri);
       } else {
@@ -1062,11 +1046,12 @@
          const contextUri = state?.context?.uri || "";
          
          if (contextUri !== PLAYLIST_URI) {
+            // DRIFTED -> Switch back
             let targetDeviceId = state.device.id;
-            if (isPhoneOrComputer(state.device)) {
-                const bestSpeaker = await findBestSpeakerDevice();
-                if (bestSpeaker) targetDeviceId = bestSpeaker.id;
-            }
+            
+            // Re-evaluate best device (in case we are on phone)
+            const bestDevice = await findBestSpeakerDevice();
+            if (bestDevice) targetDeviceId = bestDevice.id;
             
             const progress = state.progress_ms || 0;
             const duration = state.item?.duration_ms || 0;
@@ -1076,9 +1061,10 @@
          }
       }
     } catch (err) {
-       console.warn("Background update failed:", err);
+       console.warn("Background update failed (non-fatal):", err);
     }
 
+    // 3) REFRESH (Double tap to catch Spotify lag)
     await refreshPlaylistView();
     setTimeout(() => refreshPlaylistView(), 1500);
   }
@@ -1120,7 +1106,6 @@
   async function initiateSmoothSwitch(deviceId, delayMs, specificTrackUri = null) {
     cancelSmoothSwitch(); 
     
-    // Store for Skip button
     pendingDeviceId = deviceId;
     pendingOffsetUri = specificTrackUri;
 
@@ -1153,16 +1138,16 @@
      try {
         console.log("Switching to device:", deviceId);
         
-        // 1. Transfer & PAUSE (Kill Radio)
+        // 1. Force Transfer with PLAY:TRUE (Wakes up device)
         await fetchWithAuth("https://api.spotify.com/v1/me/player", {
             method: "PUT",
-            body: JSON.stringify({ device_ids: [deviceId], play: false })
+            body: JSON.stringify({ device_ids: [deviceId], play: true })
         });
 
-        // 2. Wait for transfer
-        await new Promise(r => setTimeout(r, 500));
+        // 2. Wait 1s for device to wake
+        await new Promise(r => setTimeout(r, 1000));
 
-        // 3. Play Playlist
+        // 3. Play Playlist (Overwrite stream)
         const body = { context_uri: PLAYLIST_URI };
         if (offsetUri) {
            body.offset = { uri: offsetUri };
@@ -1177,11 +1162,22 @@
         setTimeout(refreshNowPlaying, 1000);
      } catch(e) {
         console.error("Switch failed", e);
-        playlistMessage.textContent = "Failed to switch.";
+        playlistMessage.textContent = "Failed to switch. Retrying...";
+        
+        // Retry once after another second
+        setTimeout(async () => {
+             const body = { context_uri: PLAYLIST_URI };
+             if (offsetUri) body.offset = { uri: offsetUri };
+             await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
+                method: "PUT",
+                body: JSON.stringify(body)
+            });
+        }, 1000);
      }
   }
 
   forcePlayBtn.addEventListener("click", async () => {
+    // INSTANT FORCE PLAY (No Countdown)
     playlistMessage.textContent = "Locating Sonos...";
     
     try {
@@ -1195,20 +1191,9 @@
 
         const deviceId = targetDevice.id;
         playlistMessage.textContent = `Targeting: ${targetDevice.name}`;
-
-        const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
         
-        if (st.status === 204) {
-             await executeSwitch(deviceId, null);
-             return;
-        }
-
-        const state = await st.json();
-        const progress = state.progress_ms || 0;
-        const duration = state.item?.duration_ms || 0;
-        const remaining = duration - progress;
-        
-        initiateSmoothSwitch(deviceId, remaining, null);
+        // Bypass checks, just force it
+        await executeSwitch(deviceId, null);
 
     } catch (err) {
         console.error(err);
