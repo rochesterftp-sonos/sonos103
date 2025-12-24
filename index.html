@@ -444,15 +444,15 @@
       margin-top: 4px;
       min-height: 18px;
       flex-shrink: 0;
-      transition: all 0.3s ease;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     }
     .msg.pop {
-      font-size: 1.1rem;
+      font-size: 1.15rem;
       color: #4ade80; /* bright green */
       font-weight: 700;
-      transform: scale(1.02);
-      text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
-      padding: 4px 0;
+      transform: scale(1.05);
+      text-shadow: 0 0 15px rgba(74, 222, 128, 0.6);
+      padding: 6px 0;
     }
     .msg.error { color: var(--danger); }
     
@@ -585,7 +585,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v1.3"; 
+  const VERSION_NUM = "v1.5"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -825,7 +825,6 @@
 
     if (!code) return;
 
-    // We need REDIRECT_URI to perform the swap
     if (!REDIRECT_URI) loadSettings();
 
     window.history.replaceState({}, document.title, REDIRECT_URI);
@@ -880,10 +879,9 @@
     // PHASE 1: Check "What is currently playing?"
     try {
         const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-        if (playRes.status === 200) { // 200 = Active
+        if (playRes.status === 200) { 
             const playData = await playRes.json();
             const d = playData.device;
-            
             if (d && !isPhoneOrComputer(d)) {
                 console.log("Found Active Speaker via Playback State:", d.name);
                 return d;
@@ -949,7 +947,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=8&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -1006,21 +1004,10 @@
     }
 
     // --- VISUAL POP EFFECT ---
-    searchMessage.textContent = `🎉 Added "${track.name}"!`;
-    searchMessage.classList.add("pop");
+    searchMessage.textContent = `Adding "${track.name}"...`;
     
-    // Clear search box immediately so user sees the success message clearly
-    searchInput.value = "";
-    searchResults.innerHTML = "";
-
-    // Remove POP after 2s
-    setTimeout(() => {
-        searchMessage.classList.remove("pop");
-        searchMessage.textContent = ""; 
-    }, 2000);
-
     try {
-      // 1) Add to the party playlist
+      // 1) CRITICAL: Add to the party playlist
       await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
@@ -1028,35 +1015,41 @@
           body: JSON.stringify({ uris: [track.uri] }),
         }
       );
-
-      // 2) Check if we need to switch (Drift Logic)
-      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
       
+      // SUCCESS: Show visual confirmation immediately
+      searchMessage.textContent = `🎉 Added "${track.name}"!`;
+      searchMessage.classList.add("pop");
+      searchInput.value = "";
+      searchResults.innerHTML = "";
+      
+      setTimeout(() => {
+          searchMessage.classList.remove("pop");
+          searchMessage.textContent = ""; 
+      }, 2500);
+
+    } catch (err) {
+      console.error(err);
+      searchMessage.textContent = "Failed to add track. Check connection.";
+      return; // Stop here if failed
+    }
+
+    // 2) NON-CRITICAL: Player State & Drift Logic
+    try {
+      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
       if (st.status === 204) {
-         // Nothing playing. Try to start Jukebox on a SPEAKER.
+         // Nothing playing -> Try start
          const targetDevice = await findBestSpeakerDevice();
-         if (targetDevice) {
-             console.log(`Starting on ${targetDevice.name}...`);
-             await executeSwitch(targetDevice.id, track.uri);
-         }
+         if (targetDevice) await executeSwitch(targetDevice.id, track.uri);
       } else {
          const state = await st.json();
          const contextUri = state?.context?.uri || "";
-         const isOurPlaylist = (contextUri === PLAYLIST_URI);
          
-         if (isOurPlaylist) {
-            // Already playing correctly. Just queue.
-            const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
-            await fetchWithAuth(queueUrl, { method: "POST" });
-         } else {
-            // DRIFTED -> Need to switch back.
+         if (contextUri !== PLAYLIST_URI) {
+            // DRIFTED -> Switch back
             let targetDeviceId = state.device.id;
-            
             if (isPhoneOrComputer(state.device)) {
                 const bestSpeaker = await findBestSpeakerDevice();
-                if (bestSpeaker) {
-                    targetDeviceId = bestSpeaker.id;
-                }
+                if (bestSpeaker) targetDeviceId = bestSpeaker.id;
             }
             
             const progress = state.progress_ms || 0;
@@ -1066,20 +1059,13 @@
             initiateSmoothSwitch(targetDeviceId, remainingMs, track.uri);
          }
       }
-
-      // --- AUTOMATIC REFRESH LOGIC ---
-      // Refresh 1: Immediate (in case Spotify is fast)
-      await refreshPlaylistView();
-
-      // Refresh 2: Delayed (to catch server lag)
-      setTimeout(() => {
-          refreshPlaylistView();
-      }, 1500);
-
     } catch (err) {
-      console.error(err);
-      searchMessage.textContent = "Added (Error confirming).";
+       console.warn("Background update failed (non-fatal):", err);
     }
+
+    // 3) REFRESH (Double tap to catch Spotify lag)
+    await refreshPlaylistView();
+    setTimeout(() => refreshPlaylistView(), 1500);
   }
 
   /**************************************************************
@@ -1135,6 +1121,17 @@
   
   async function executeSwitch(deviceId, offsetUri) {
      try {
+        // AGGRESSIVE SWITCH:
+        // 1. Transfer Playback first (Forces device to wake/grab focus)
+        await fetchWithAuth("https://api.spotify.com/v1/me/player", {
+            method: "PUT",
+            body: JSON.stringify({ device_ids: [deviceId] })
+        });
+
+        // 2. Short wait for transfer
+        await new Promise(r => setTimeout(r, 300));
+
+        // 3. Play Playlist
         const body = { context_uri: PLAYLIST_URI };
         if (offsetUri) {
            body.offset = { uri: offsetUri };
