@@ -437,15 +437,24 @@
       background: rgba(31,41,55,0.95);
     }
 
+    /* MSG POP EFFECT */
     .msg {
       font-size: .82rem;
       color: var(--text-dim);
       margin-top: 4px;
       min-height: 18px;
       flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+    .msg.pop {
+      font-size: 1.1rem;
+      color: #4ade80; /* bright green */
+      font-weight: 700;
+      transform: scale(1.02);
+      text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+      padding: 4px 0;
     }
     .msg.error { color: var(--danger); }
-    .msg.success { color: var(--accent-text); }
     
     .playlist-controls {
       display:flex; 
@@ -576,7 +585,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v1.2"; // Manually update this when changing code
+  const VERSION_NUM = "v1.3"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -940,7 +949,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&limit=8&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -996,7 +1005,19 @@
       return;
     }
 
-    searchMessage.textContent = `Adding "${track.name}"…`;
+    // --- VISUAL POP EFFECT ---
+    searchMessage.textContent = `🎉 Added "${track.name}"!`;
+    searchMessage.classList.add("pop");
+    
+    // Clear search box immediately so user sees the success message clearly
+    searchInput.value = "";
+    searchResults.innerHTML = "";
+
+    // Remove POP after 2s
+    setTimeout(() => {
+        searchMessage.classList.remove("pop");
+        searchMessage.textContent = ""; 
+    }, 2000);
 
     try {
       // 1) Add to the party playlist
@@ -1015,10 +1036,8 @@
          // Nothing playing. Try to start Jukebox on a SPEAKER.
          const targetDevice = await findBestSpeakerDevice();
          if (targetDevice) {
-             searchMessage.textContent = `Added. Starting on ${targetDevice.name}...`;
+             console.log(`Starting on ${targetDevice.name}...`);
              await executeSwitch(targetDevice.id, track.uri);
-         } else {
-             searchMessage.textContent = "Added. (No speakers found to auto-start)";
          }
       } else {
          const state = await st.json();
@@ -1029,7 +1048,6 @@
             // Already playing correctly. Just queue.
             const queueUrl = `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(track.uri)}`;
             await fetchWithAuth(queueUrl, { method: "POST" });
-            searchMessage.textContent = `Added & Queued: ${track.name}`;
          } else {
             // DRIFTED -> Need to switch back.
             let targetDeviceId = state.device.id;
@@ -1038,9 +1056,6 @@
                 const bestSpeaker = await findBestSpeakerDevice();
                 if (bestSpeaker) {
                     targetDeviceId = bestSpeaker.id;
-                } else {
-                    searchMessage.textContent = "Added. (Playing on phone; no Sonos found)";
-                    return;
                 }
             }
             
@@ -1048,29 +1063,22 @@
             const duration = state.item?.duration_ms || 0;
             const remainingMs = duration - progress;
             
-            searchMessage.textContent = `Added. JukeBox will resume after this song.`;
             initiateSmoothSwitch(targetDeviceId, remainingMs, track.uri);
          }
       }
 
-      // --- AUTOMATIC REFRESH & RESET LOGIC ---
-      
-      // 1. Clear search to "reset" the kiosk for next user
-      searchInput.value = "";
-      searchResults.innerHTML = "";
-      searchMessage.textContent = `Successfully added: ${track.name}`;
-
-      // 2. Immediate Refresh (Optimistic)
+      // --- AUTOMATIC REFRESH LOGIC ---
+      // Refresh 1: Immediate (in case Spotify is fast)
       await refreshPlaylistView();
 
-      // 3. Delayed Refresh (Wait for Spotify Backend to update)
+      // Refresh 2: Delayed (to catch server lag)
       setTimeout(() => {
           refreshPlaylistView();
-      }, 2000);
+      }, 1500);
 
     } catch (err) {
       console.error(err);
-      searchMessage.textContent = "Added to playlist.";
+      searchMessage.textContent = "Added (Error confirming).";
     }
   }
 
