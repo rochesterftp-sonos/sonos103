@@ -31,11 +31,11 @@
       display: flex;
       justify-content: center;
       padding: 10px;
-      overflow-x: hidden; /* Prevent horizontal scroll */
+      overflow-x: hidden;
     }
     .app {
       width: 100%;
-      max-width: 100%; /* Allow full width usage */
+      max-width: 100%;
       background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(6,8,20,0.98));
       border-radius: 26px;
       box-shadow: var(--shadow-soft);
@@ -45,7 +45,7 @@
       flex-direction: column;
       gap: 12px;
       position: relative;
-      height: 98vh; /* Fix height for Surface Pro full screen feel */
+      height: 98vh;
     }
     
     /* SETTINGS MODAL */
@@ -254,14 +254,14 @@
       color: var(--text-dim);
     }
 
-    /* --- LAYOUT FIXES FOR 50/50 SPLIT --- */
+    /* 50/50 Layout Fix */
     .layout {
       display: flex;
       flex-direction: column;
       gap: 10px;
       margin-top: 6px;
-      flex: 1; /* Take remaining height */
-      min-height: 0; /* Allow scrolling inside */
+      flex: 1;
+      min-height: 0;
     }
     @media (min-width: 900px) {
       .layout {
@@ -270,10 +270,9 @@
         align-items: stretch;
       }
       .col {
-        /* THIS IS THE KEY FIX: */
-        flex: 1 1 0px; /* Grow 1, Shrink 1, Basis 0 (ignore content width) */
-        width: 50%;    /* Explicit width target */
-        min-width: 0;  /* Allow flex child to shrink below content size */
+        flex: 1 1 0px; 
+        width: 50%;    
+        min-width: 0;  
         display: flex;
         flex-direction: column;
       }
@@ -287,8 +286,8 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      flex: 1; /* Fill column height */
-      min-height: 0; /* Allow inner scrolling */
+      flex: 1;
+      min-height: 0;
     }
     .panel-header {
       display: flex;
@@ -337,7 +336,6 @@
       border: 1px solid rgba(31,41,55,0.95);
       background: radial-gradient(circle at top, rgba(15,23,42,0.96), #020617);
       padding: 4px;
-      /* Scroll within the list, not the page */
       overflow-y: auto;
       margin-top: 4px;
       flex: 1;
@@ -352,35 +350,34 @@
       cursor: pointer;
       transition: background .08s ease, transform .04s ease;
       min-height: 52px;
-      max-width: 100%; /* Prevent expanding beyond parent */
+      max-width: 100%;
     }
     .track-row:hover {
       background: rgba(31,41,55,0.95);
       transform: translateY(-1px);
     }
     
-    /* --- TEXT TRUNCATION FIX --- */
     .track-main {
       flex: 1;
-      min-width: 0; /* CRITICAL: Allows flex child to shrink past content */
+      min-width: 0;
       display: flex;
       flex-direction: column;
       gap: 2px;
-      overflow: hidden; /* Contain text */
+      overflow: hidden;
     }
     .track-title {
       font-size: .98rem;
       font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis; /* The "..." magic */
+      text-overflow: ellipsis;
     }
     .track-sub {
       font-size: .8rem;
       color: var(--text-dim);
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis; /* The "..." magic */
+      text-overflow: ellipsis;
     }
     
     .track-right {
@@ -389,7 +386,7 @@
       gap: 4px;
       align-items: flex-end;
       justify-content: center;
-      flex-shrink: 0; /* Don't squash buttons */
+      flex-shrink: 0;
     }
     .track-reorder {
       display: flex;
@@ -589,7 +586,6 @@
     REDIRECT_URI = localStorage.getItem("sj_redirect_uri") || "";
     PARTY_PLAYLIST_ID = localStorage.getItem("sj_playlist_id") || "";
     
-    // Clean playlist ID if it contains 'spotify:playlist:'
     if (PARTY_PLAYLIST_ID.includes(":")) {
         PARTY_PLAYLIST_ID = PARTY_PLAYLIST_ID.split(":").pop();
     }
@@ -611,14 +607,13 @@
     localStorage.setItem("sj_client_id", cfgClientId.value.trim());
     localStorage.setItem("sj_redirect_uri", cfgRedirect.value.trim());
     localStorage.setItem("sj_playlist_id", cfgPlaylistId.value.trim());
-    location.reload(); // Reload to apply
+    location.reload(); 
   });
 
   openSettingsBtn.addEventListener("click", () => {
     settingsModal.style.display = "flex";
   });
 
-  // Auto-remove the last played track from the playlist when the song changes
   const AUTO_REMOVE_PLAYED = true;
 
   const SPOTIFY_SCOPES = [
@@ -635,7 +630,6 @@
   let nowPlayingIntervalId = null;
   let lastTrackUri = null;
   
-  // For Smooth Switching
   let switchTimer = null;
   let switchInterval = null;
 
@@ -792,7 +786,6 @@
 
     if (!code) return;
 
-    // We need REDIRECT_URI to perform the swap
     if (!REDIRECT_URI) loadSettings();
 
     window.history.replaceState({}, document.title, REDIRECT_URI);
@@ -847,12 +840,10 @@
     // PHASE 1: Check "What is currently playing?"
     try {
         const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-        if (playRes.status === 200) { // 200 = Active
+        if (playRes.status === 200) { 
             const playData = await playRes.json();
             const d = playData.device;
-            
             if (d && !isPhoneOrComputer(d)) {
-                console.log("Found Active Speaker via Playback State:", d.name);
                 return d;
             }
         }
@@ -1014,14 +1005,12 @@
                 const bestSpeaker = await findBestSpeakerDevice();
                 if (bestSpeaker) {
                     targetDeviceId = bestSpeaker.id;
-                    console.log("Redirecting playback from Phone to Speaker:", bestSpeaker.name);
                 } else {
                     searchMessage.textContent = "Added. (Playing on phone; no Sonos found)";
                     return;
                 }
             }
             
-            // Calculate delay
             const progress = state.progress_ms || 0;
             const duration = state.item?.duration_ms || 0;
             const remainingMs = duration - progress;
@@ -1031,7 +1020,20 @@
          }
       }
 
+      // --- AUTOMATIC REFRESH & RESET LOGIC ---
+      
+      // 1. Clear search to "reset" the kiosk for next user
+      searchInput.value = "";
+      searchResults.innerHTML = "";
+      searchMessage.textContent = `Successfully added: ${track.name}`;
+
+      // 2. Immediate Refresh (Optimistic)
       await refreshPlaylistView();
+
+      // 3. Delayed Refresh (Wait for Spotify Backend to update)
+      setTimeout(() => {
+          refreshPlaylistView();
+      }, 2000);
 
     } catch (err) {
       console.error(err);
