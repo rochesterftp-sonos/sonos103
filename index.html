@@ -176,6 +176,11 @@
         color: #fca5a5;
         border-color: rgba(248, 113, 113, 0.4);
     }
+    .btn-skip {
+        background: rgba(34, 197, 94, 0.15);
+        color: #86efac;
+        border-color: rgba(34, 197, 94, 0.4);
+    }
 
     /* NOW PLAYING CARD */
     .now-playing {
@@ -195,13 +200,13 @@
     .pending-overlay {
       position: absolute;
       top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(2, 6, 23, 0.9);
+      background: rgba(2, 6, 23, 0.95);
       display: flex;
       align-items: center;
       justify-content: space-between;
       padding: 0 20px;
       z-index: 10;
-      backdrop-filter: blur(4px);
+      backdrop-filter: blur(8px);
     }
     
     .np-art {
@@ -531,7 +536,10 @@
       <div style="color: var(--accent-text); font-weight:600; font-size:0.95rem;">
         ⌛ Switching to JukeBox in <span id="pendingTimer">0:00</span>...
       </div>
-      <button class="btn btn-cancel btn-sm" id="cancelSwitchBtn">Cancel</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-skip btn-sm" id="skipSwitchBtn">⚡ Skip</button>
+        <button class="btn btn-cancel btn-sm" id="cancelSwitchBtn">Cancel</button>
+      </div>
     </div>
 
     <div class="np-art" id="nowPlayingArt"></div>
@@ -590,7 +598,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v1.9"; 
+  const VERSION_NUM = "v2.0"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -678,6 +686,8 @@
   
   let switchTimer = null;
   let switchInterval = null;
+  let pendingDeviceId = null;
+  let pendingOffsetUri = null;
 
   /**************************************************************
    * AUTH + TOKEN HELPERS
@@ -879,40 +889,58 @@
   }
 
   /**************************************************************
-   * DEVICE FINDER HELPER (V1.9 STRICT SPEAKER PRIORITY)
+   * DEVICE FINDER HELPER
    **************************************************************/
   async function findBestSpeakerDevice() {
+    try {
+        const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
+        if (playRes.status === 200) { 
+            const playData = await playRes.json();
+            const d = playData.device;
+            if (d && !isPhoneOrComputer(d)) {
+                console.log("Found Active Speaker:", d.name);
+                return d;
+            }
+        }
+    } catch (e) {}
+
     const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
     const data = await res.json();
     const devices = data.devices || [];
 
     if (devices.length === 0) return null;
 
-    // 1. Separate Speakers from Phones/Computers
-    const speakers = devices.filter(d => !isPhoneOrComputer(d));
-    const nonSpeakers = devices.filter(d => isPhoneOrComputer(d));
-
-    // 2. Parse User's Speaker List
-    const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
+    const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos";
     const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     
-    // 3. PRIORITY 1: Match Name in SPEAKER list (Active or Inactive)
-    // We prefer a matching SPEAKER over an active PHONE.
-    let target = speakers.find(d => {
+    // 1. ACTIVE matching device
+    let target = devices.find(d => {
+        if (isPhoneOrComputer(d)) return false;
+        const n = d.name.toLowerCase();
+        return d.is_active && allowedNames.some(k => n.includes(k));
+    });
+    if (target) return target;
+
+    // 2. ACTIVE any speaker
+    target = devices.find(d => d.is_active && !isPhoneOrComputer(d));
+    if (target) return target;
+
+    // 3. IDLE matching device
+    target = devices.find(d => {
+        if (isPhoneOrComputer(d)) return false;
         const n = d.name.toLowerCase();
         return allowedNames.some(k => n.includes(k));
     });
     if (target) return target;
 
-    // 4. PRIORITY 2: Any SPEAKER (Active preferred)
-    target = speakers.find(d => d.is_active);
-    if (target) return target;
-    
-    // 5. PRIORITY 3: Any SPEAKER (Inactive)
-    if (speakers.length > 0) return speakers[0];
+    // 4. Any idle speaker
+    target = devices.find(d => {
+        if (isPhoneOrComputer(d)) return false;
+        const type = d.type.toLowerCase();
+        return type === 'speaker' || type === 'castaudio' || type === 'avr' || type === 'audio_dongle';
+    });
 
-    // 6. LAST RESORT: Phone/Computer (only if no speakers found)
-    return nonSpeakers[0] || null;
+    return target || null;
   }
 
   function isPhoneOrComputer(d) {
@@ -941,7 +969,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -997,11 +1025,9 @@
       return;
     }
 
-    // --- VISUAL POP EFFECT ---
     searchMessage.textContent = `Adding "${track.name}"...`;
     
     try {
-      // 1) CRITICAL: Add to the party playlist
       await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
@@ -1010,7 +1036,6 @@
         }
       );
       
-      // SUCCESS: Show visual confirmation immediately
       searchMessage.textContent = `🎉 Added "${track.name}"!`;
       searchMessage.classList.add("pop");
       searchInput.value = "";
@@ -1024,14 +1049,12 @@
     } catch (err) {
       console.error(err);
       searchMessage.textContent = "Failed to add track. Check connection.";
-      return; // Stop here if failed
+      return; 
     }
 
-    // 2) NON-CRITICAL: Player State & Drift Logic
     try {
       const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
       if (st.status === 204) {
-         // Nothing playing -> Try start
          const targetDevice = await findBestSpeakerDevice();
          if (targetDevice) await executeSwitch(targetDevice.id, track.uri);
       } else {
@@ -1039,12 +1062,11 @@
          const contextUri = state?.context?.uri || "";
          
          if (contextUri !== PLAYLIST_URI) {
-            // DRIFTED -> Switch back
             let targetDeviceId = state.device.id;
-            
-            // Re-evaluate best device (in case we are on phone)
-            const bestDevice = await findBestSpeakerDevice();
-            if (bestDevice) targetDeviceId = bestDevice.id;
+            if (isPhoneOrComputer(state.device)) {
+                const bestSpeaker = await findBestSpeakerDevice();
+                if (bestSpeaker) targetDeviceId = bestSpeaker.id;
+            }
             
             const progress = state.progress_ms || 0;
             const duration = state.item?.duration_ms || 0;
@@ -1054,10 +1076,9 @@
          }
       }
     } catch (err) {
-       console.warn("Background update failed (non-fatal):", err);
+       console.warn("Background update failed:", err);
     }
 
-    // 3) REFRESH (Double tap to catch Spotify lag)
     await refreshPlaylistView();
     setTimeout(() => refreshPlaylistView(), 1500);
   }
@@ -1069,6 +1090,7 @@
   const pendingOverlay = document.getElementById("pendingOverlay");
   const pendingTimer = document.getElementById("pendingTimer");
   const cancelSwitchBtn = document.getElementById("cancelSwitchBtn");
+  const skipSwitchBtn = document.getElementById("skipSwitchBtn");
   
   function cancelSmoothSwitch() {
     if (switchTimer) clearTimeout(switchTimer);
@@ -1080,6 +1102,13 @@
   }
   
   cancelSwitchBtn.addEventListener("click", cancelSmoothSwitch);
+  
+  skipSwitchBtn.addEventListener("click", () => {
+      if (pendingDeviceId) {
+          executeSwitch(pendingDeviceId, pendingOffsetUri);
+          cancelSmoothSwitch();
+      }
+  });
 
   function formatTime(ms) {
     const totalSec = Math.floor(ms / 1000);
@@ -1090,8 +1119,15 @@
 
   async function initiateSmoothSwitch(deviceId, delayMs, specificTrackUri = null) {
     cancelSmoothSwitch(); 
+    
+    // Store for Skip button
+    pendingDeviceId = deviceId;
+    pendingOffsetUri = specificTrackUri;
 
-    if (delayMs < 2000) {
+    // Trigger 3 seconds EARLY to beat the radio
+    const safeDelay = delayMs - 3000;
+
+    if (safeDelay < 2000) {
        await executeSwitch(deviceId, specificTrackUri);
        return;
     }
@@ -1110,20 +1146,21 @@
     switchTimer = setTimeout(async () => {
       await executeSwitch(deviceId, specificTrackUri);
       cancelSmoothSwitch(); 
-    }, delayMs - 500); 
+    }, safeDelay); 
   }
   
   async function executeSwitch(deviceId, offsetUri) {
      try {
-        // AGGRESSIVE SWITCH (V1.9 "Wake Up"):
-        // 1. Transfer Playback + PLAY TRUE (Force Wake)
+        console.log("Switching to device:", deviceId);
+        
+        // 1. Transfer & PAUSE (Kill Radio)
         await fetchWithAuth("https://api.spotify.com/v1/me/player", {
             method: "PUT",
-            body: JSON.stringify({ device_ids: [deviceId], play: true })
+            body: JSON.stringify({ device_ids: [deviceId], play: false })
         });
 
-        // 2. Wait 1 Second for device to wake
-        await new Promise(r => setTimeout(r, 1000));
+        // 2. Wait for transfer
+        await new Promise(r => setTimeout(r, 500));
 
         // 3. Play Playlist
         const body = { context_uri: PLAYLIST_URI };
@@ -1135,6 +1172,7 @@
             method: "PUT",
             body: JSON.stringify(body)
         });
+        
         playlistMessage.textContent = "Jukebox Started!";
         setTimeout(refreshNowPlaying, 1000);
      } catch(e) {
