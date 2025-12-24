@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Three Tails Tavern JukeBox</title>
+  <title>Social JukeBox</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -31,10 +31,11 @@
       display: flex;
       justify-content: center;
       padding: 10px;
+      overflow-x: hidden; /* Prevent horizontal scroll */
     }
     .app {
       width: 100%;
-      max-width: 1200px;
+      max-width: 100%; /* Allow full width usage */
       background: linear-gradient(135deg, rgba(15,23,42,0.98), rgba(6,8,20,0.98));
       border-radius: 26px;
       box-shadow: var(--shadow-soft);
@@ -43,13 +44,44 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      position: relative;
+      height: 98vh; /* Fix height for Surface Pro full screen feel */
     }
+    
+    /* SETTINGS MODAL */
+    .settings-modal {
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(2, 6, 23, 0.98);
+      z-index: 100;
+      border-radius: 26px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      gap: 15px;
+    }
+    .settings-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 25px;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 500px;
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+    }
+    .settings-label { font-size: 0.9rem; color: var(--text-dim); margin-bottom: 4px; display:block;}
+    
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 10px;
       padding: 4px 4px 2px;
+      flex-shrink: 0;
     }
     .title-block {
       display: flex;
@@ -144,11 +176,6 @@
         color: #fca5a5;
         border-color: rgba(248, 113, 113, 0.4);
     }
-    .btn-debug {
-        background: rgba(59, 130, 246, 0.15);
-        color: #93c5fd;
-        border: 1px solid rgba(59, 130, 246, 0.4);
-    }
 
     /* NOW PLAYING CARD */
     .now-playing {
@@ -162,6 +189,7 @@
       box-shadow: 0 12px 30px rgba(0,0,0,0.55);
       position: relative;
       overflow: hidden;
+      flex-shrink: 0;
     }
     /* Pending Switch Overlay */
     .pending-overlay {
@@ -226,20 +254,28 @@
       color: var(--text-dim);
     }
 
+    /* --- LAYOUT FIXES FOR 50/50 SPLIT --- */
     .layout {
       display: flex;
       flex-direction: column;
       gap: 10px;
       margin-top: 6px;
+      flex: 1; /* Take remaining height */
+      min-height: 0; /* Allow scrolling inside */
     }
     @media (min-width: 900px) {
       .layout {
         flex-direction: row;
-        gap: 10px;
+        gap: 12px;
         align-items: stretch;
       }
       .col {
-        flex: 1;
+        /* THIS IS THE KEY FIX: */
+        flex: 1 1 0px; /* Grow 1, Shrink 1, Basis 0 (ignore content width) */
+        width: 50%;    /* Explicit width target */
+        min-width: 0;  /* Allow flex child to shrink below content size */
+        display: flex;
+        flex-direction: column;
       }
     }
 
@@ -251,7 +287,8 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      min-height: 0;
+      flex: 1; /* Fill column height */
+      min-height: 0; /* Allow inner scrolling */
     }
     .panel-header {
       display: flex;
@@ -259,6 +296,7 @@
       justify-content: space-between;
       gap: 12px;
       flex-wrap: wrap;
+      flex-shrink: 0;
     }
     .panel-title {
       font-size: 1.05rem;
@@ -274,6 +312,7 @@
       display: flex;
       flex-direction: column;
       gap: 8px;
+      flex-shrink: 0;
     }
     .input-row {
       display: flex;
@@ -298,9 +337,10 @@
       border: 1px solid rgba(31,41,55,0.95);
       background: radial-gradient(circle at top, rgba(15,23,42,0.96), #020617);
       padding: 4px;
-      max-height: 430px;
+      /* Scroll within the list, not the page */
       overflow-y: auto;
       margin-top: 4px;
+      flex: 1;
     }
 
     .track-row {
@@ -312,38 +352,44 @@
       cursor: pointer;
       transition: background .08s ease, transform .04s ease;
       min-height: 52px;
+      max-width: 100%; /* Prevent expanding beyond parent */
     }
     .track-row:hover {
       background: rgba(31,41,55,0.95);
       transform: translateY(-1px);
     }
+    
+    /* --- TEXT TRUNCATION FIX --- */
     .track-main {
       flex: 1;
-      min-width: 0;
+      min-width: 0; /* CRITICAL: Allows flex child to shrink past content */
       display: flex;
       flex-direction: column;
       gap: 2px;
+      overflow: hidden; /* Contain text */
     }
     .track-title {
       font-size: .98rem;
       font-weight: 500;
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis;
+      text-overflow: ellipsis; /* The "..." magic */
     }
     .track-sub {
       font-size: .8rem;
       color: var(--text-dim);
       white-space: nowrap;
       overflow: hidden;
-      text-overflow: ellipsis;
+      text-overflow: ellipsis; /* The "..." magic */
     }
+    
     .track-right {
       display: flex;
       flex-direction: column;
       gap: 4px;
       align-items: flex-end;
       justify-content: center;
+      flex-shrink: 0; /* Don't squash buttons */
     }
     .track-reorder {
       display: flex;
@@ -399,6 +445,7 @@
       color: var(--text-dim);
       margin-top: 4px;
       min-height: 18px;
+      flex-shrink: 0;
     }
     .msg.error { color: var(--danger); }
     .msg.success { color: var(--accent-text); }
@@ -413,13 +460,38 @@
 </head>
 <body>
 <div class="app">
+  
+  <div class="settings-modal" id="settingsModal" style="display:none;">
+    <div class="title" style="margin-bottom:10px;">⚙️ Setup JukeBox</div>
+    <div class="settings-card">
+      <div>
+        <label class="settings-label">Spotify Client ID</label>
+        <input id="cfgClientId" class="input" type="text" placeholder="e.g. b48fe08..." />
+      </div>
+      <div>
+        <label class="settings-label">Spotify Redirect URI</label>
+        <input id="cfgRedirect" class="input" type="text" placeholder="e.g. https://yourname.github.io/jukebox/" />
+      </div>
+      <div>
+        <label class="settings-label">Playlist ID (Copy from Spotify Share Link)</label>
+        <input id="cfgPlaylistId" class="input" type="text" placeholder="e.g. 3oHuSCHOpiA..." />
+      </div>
+      <div style="display:flex; gap:10px; margin-top:10px;">
+        <button class="btn btn-primary" style="flex:1;" id="saveSettingsBtn">Save & Start</button>
+      </div>
+      <div style="font-size:0.8rem; color:#6b7280; text-align:center;">
+        These are saved to your device browser.
+      </div>
+    </div>
+  </div>
+
   <header>
     <div class="title-block">
       <div class="title">
-        🎧 Three Tails Tavern JukeBox
+        🎧 Social JukeBox
       </div>
       <div class="tagline">
-        Guests add songs to the party playlist. You pick your Sonos group in the Spotify app.
+        Queue songs on the host's Sonos.
       </div>
     </div>
     <div class="status-area">
@@ -429,8 +501,9 @@
         <span class="status-value" id="authStatusText">Not connected</span>
       </div>
       <div style="display:flex; gap:8px;">
+        <button class="btn btn-ghost btn-sm" id="openSettingsBtn">⚙️</button>
         <button class="btn btn-ghost" id="logoutBtn" style="display:none;">Log out</button>
-        <button class="btn btn-primary" id="loginBtn">Connect Spotify</button>
+        <button class="btn btn-primary" id="loginBtn">Connect</button>
       </div>
     </div>
   </header>
@@ -484,7 +557,6 @@
             <div class="panel-subtitle">Shared queue</div>
           </div>
           <div class="playlist-controls">
-            <button class="btn btn-debug btn-sm" id="debugSpeakersBtn">🕵️ List Speakers</button>
             <button class="btn btn-primary btn-sm" id="forcePlayBtn">▶ Start JukeBox</button>
             <button class="btn btn-ghost btn-sm" id="refreshPlaylistBtn">Refresh</button>
           </div>
@@ -498,12 +570,53 @@
 
 <script>
   /**************************************************************
-   * CONFIG
+   * CONFIG & STORAGE
    **************************************************************/
-  const SPOTIFY_CLIENT_ID = "b48fe08bcf6c448aabe8774fbfdcd943";
-  const REDIRECT_URI = "https://rochesterftp-sonos.github.io/sonos103/"; 
-  const PARTY_PLAYLIST_ID = "3oHuSCHOpiA2DOOI72uR2f"; 
-  const PLAYLIST_URI = "spotify:playlist:3oHuSCHOpiA2DOOI72uR2f";
+  let SPOTIFY_CLIENT_ID = "";
+  let REDIRECT_URI = "";
+  let PARTY_PLAYLIST_ID = "";
+  let PLAYLIST_URI = "";
+
+  const settingsModal = document.getElementById("settingsModal");
+  const cfgClientId = document.getElementById("cfgClientId");
+  const cfgRedirect = document.getElementById("cfgRedirect");
+  const cfgPlaylistId = document.getElementById("cfgPlaylistId");
+  const saveSettingsBtn = document.getElementById("saveSettingsBtn");
+  const openSettingsBtn = document.getElementById("openSettingsBtn");
+
+  function loadSettings() {
+    SPOTIFY_CLIENT_ID = localStorage.getItem("sj_client_id") || "";
+    REDIRECT_URI = localStorage.getItem("sj_redirect_uri") || "";
+    PARTY_PLAYLIST_ID = localStorage.getItem("sj_playlist_id") || "";
+    
+    // Clean playlist ID if it contains 'spotify:playlist:'
+    if (PARTY_PLAYLIST_ID.includes(":")) {
+        PARTY_PLAYLIST_ID = PARTY_PLAYLIST_ID.split(":").pop();
+    }
+    
+    PLAYLIST_URI = `spotify:playlist:${PARTY_PLAYLIST_ID}`;
+
+    cfgClientId.value = SPOTIFY_CLIENT_ID;
+    cfgRedirect.value = REDIRECT_URI;
+    cfgPlaylistId.value = PARTY_PLAYLIST_ID;
+
+    if (!SPOTIFY_CLIENT_ID || !REDIRECT_URI || !PARTY_PLAYLIST_ID) {
+      settingsModal.style.display = "flex";
+    } else {
+      settingsModal.style.display = "none";
+    }
+  }
+
+  saveSettingsBtn.addEventListener("click", () => {
+    localStorage.setItem("sj_client_id", cfgClientId.value.trim());
+    localStorage.setItem("sj_redirect_uri", cfgRedirect.value.trim());
+    localStorage.setItem("sj_playlist_id", cfgPlaylistId.value.trim());
+    location.reload(); // Reload to apply
+  });
+
+  openSettingsBtn.addEventListener("click", () => {
+    settingsModal.style.display = "flex";
+  });
 
   // Auto-remove the last played track from the playlist when the song changes
   const AUTO_REMOVE_PLAYED = true;
@@ -646,6 +759,11 @@
   }
 
   function beginSpotifyLogin() {
+    if (!SPOTIFY_CLIENT_ID || !REDIRECT_URI) {
+        alert("Please configure settings first.");
+        settingsModal.style.display = "flex";
+        return;
+    }
     const state = generateRandomString(16);
     const codeVerifier = generateRandomString(64);
     localStorage.setItem("sj_spotify_state", state);
@@ -673,6 +791,9 @@
     const storedState = localStorage.getItem("sj_spotify_state");
 
     if (!code) return;
+
+    // We need REDIRECT_URI to perform the swap
+    if (!REDIRECT_URI) loadSettings();
 
     window.history.replaceState({}, document.title, REDIRECT_URI);
 
@@ -724,15 +845,12 @@
    **************************************************************/
   async function findBestSpeakerDevice() {
     // PHASE 1: Check "What is currently playing?"
-    // If music is *already* coming out of the Sonos, this endpoint 
-    // will see it even if the "Devices" list is hiding it.
     try {
         const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
         if (playRes.status === 200) { // 200 = Active
             const playData = await playRes.json();
             const d = playData.device;
             
-            // Is the currently playing device a valid Speaker?
             if (d && !isPhoneOrComputer(d)) {
                 console.log("Found Active Speaker via Playback State:", d.name);
                 return d;
@@ -749,7 +867,6 @@
 
     if (devices.length === 0) return null;
 
-    // RULE: PRIORITY BY NAME (regardless of type)
     const allowedNames = ["basement", "family", "sonos", "symfonisk", "beam", "arc", "move", "roam"];
     
     let target = devices.find(d => {
@@ -760,7 +877,6 @@
 
     if (target) return target;
 
-    // RULE: GENERIC SPEAKER TYPE
     target = devices.find(d => {
         if (isPhoneOrComputer(d)) return false;
         const type = d.type.toLowerCase();
@@ -769,7 +885,6 @@
     
     if (target) return target;
 
-    // RULE: LAST RESORT - ACTIVE NON-PHONE
     target = devices.find(d => d.is_active && !isPhoneOrComputer(d));
 
     return target || null;
@@ -778,9 +893,7 @@
   function isPhoneOrComputer(d) {
       const type = d.type.toLowerCase();
       const name = d.name.toLowerCase();
-      // Explicitly block types
       if (type === 'smartphone' || type === 'computer' || type === 'tablet') return true;
-      // Explicitly block names (just in case)
       if (name.includes("iphone") || name.includes("pixel") || name.includes("samsung") || name.includes("macbook")) return true;
       return false;
   }
@@ -895,13 +1008,13 @@
             searchMessage.textContent = `Added & Queued: ${track.name}`;
          } else {
             // DRIFTED -> Need to switch back.
-            // Check if current device is a phone/computer. If so, try to find a Speaker.
             let targetDeviceId = state.device.id;
             
             if (isPhoneOrComputer(state.device)) {
                 const bestSpeaker = await findBestSpeakerDevice();
                 if (bestSpeaker) {
                     targetDeviceId = bestSpeaker.id;
+                    console.log("Redirecting playback from Phone to Speaker:", bestSpeaker.name);
                 } else {
                     searchMessage.textContent = "Added. (Playing on phone; no Sonos found)";
                     return;
@@ -1030,42 +1143,6 @@
         playlistMessage.textContent = "Error checking status.";
     }
   });
-
-  /**************************************************************
-   * DEBUG BUTTON
-   **************************************************************/
-  document.getElementById("debugSpeakersBtn").addEventListener("click", async () => {
-    try {
-        const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
-        const data = await res.json();
-        const devices = data.devices || [];
-        
-        if (devices.length === 0) {
-            alert("Spotify found 0 devices.");
-        } else {
-            const list = devices.map(d => 
-                `• ${d.name} [Type: ${d.type}]`
-            ).join("\n");
-            
-            // ALSO check current playback
-            let extra = "";
-            try {
-               const pRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-               if (pRes.status === 200) {
-                   const pData = await pRes.json();
-                   if (pData.device) {
-                       extra = `\n\nCurrently Playing on: ${pData.device.name} [${pData.device.type}]`;
-                   }
-               }
-            } catch {}
-
-            alert("Available Devices:\n" + list + extra);
-        }
-    } catch (err) {
-        alert("Error fetching device list: " + err.message);
-    }
-  });
-
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
@@ -1357,6 +1434,7 @@
   refreshPlaylistBtn.addEventListener("click", refreshPlaylistView);
 
   (async function init() {
+    loadSettings();
     renderEmptyNowPlaying();
     const tokens = getStoredTokens();
     if (tokens && tokens.access_token) {
