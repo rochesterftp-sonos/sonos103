@@ -276,8 +276,8 @@
       }
       .col {
         flex: 1 1 0px; 
-        width: 50%;    
-        min-width: 0;  
+        width: 50%;     
+        min-width: 0;   
         display: flex;
         flex-direction: column;
       }
@@ -598,7 +598,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.1"; 
+  const VERSION_NUM = "v2.2 (Fixed Device Logic)"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -889,7 +889,7 @@
   }
 
   /**************************************************************
-   * DEVICE FINDER HELPER
+   * DEVICE FINDER HELPER (FIXED LOGIC)
    **************************************************************/
   async function findBestSpeakerDevice() {
     const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
@@ -898,27 +898,29 @@
 
     if (devices.length === 0) return null;
 
+    // Filter out phones/computers first to prioritize speakers
     const speakers = devices.filter(d => !isPhoneOrComputer(d));
     const nonSpeakers = devices.filter(d => isPhoneOrComputer(d));
 
     const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     
-    // 1. PRIORITY: Match Name in SPEAKER list (Active or Inactive)
-    let target = speakers.find(d => {
+    // --- UPDATED PRIORITY LOGIC (v2.2) ---
+    // 1. PRIORITY: The device currently playing music (Prevent Hijack!)
+    let target = speakers.find(d => d.is_active);
+    if (target) return target;
+
+    // 2. PRIORITY: Match Name in SPEAKER list (Fallback if nothing is playing)
+    target = speakers.find(d => {
         const n = d.name.toLowerCase();
         return allowedNames.some(k => n.includes(k));
     });
     if (target) return target;
-
-    // 2. PRIORITY: Any Active Speaker
-    target = speakers.find(d => d.is_active);
-    if (target) return target;
     
-    // 3. PRIORITY: Any Inactive Speaker
+    // 3. PRIORITY: Any Inactive Speaker (First one found)
     if (speakers.length > 0) return speakers[0];
 
-    // 4. LAST RESORT: Phone
+    // 4. LAST RESORT: Phone/Computer
     return nonSpeakers[0] || null;
   }
 
