@@ -475,6 +475,11 @@
         <input id="cfgAppTitle" class="input" type="text" placeholder="e.g. Social JukeBox" />
       </div>
       
+      <div>
+        <label class="settings-label">Target Speaker Names (comma separated)</label>
+        <input id="cfgSpeakerNames" class="input" type="text" placeholder="e.g. Jukebox, Basement, Family Room" />
+      </div>
+      
       <div style="border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;"></div>
 
       <div>
@@ -585,19 +590,21 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v1.5"; 
+  const VERSION_NUM = "v1.8"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
   let PARTY_PLAYLIST_ID = "";
   let PLAYLIST_URI = "";
   let APP_TITLE = "Social JukeBox";
+  let SPEAKER_NAMES = "";
 
   const settingsModal = document.getElementById("settingsModal");
   const cfgClientId = document.getElementById("cfgClientId");
   const cfgRedirect = document.getElementById("cfgRedirect");
   const cfgPlaylistId = document.getElementById("cfgPlaylistId");
   const cfgAppTitle = document.getElementById("cfgAppTitle");
+  const cfgSpeakerNames = document.getElementById("cfgSpeakerNames");
   const saveSettingsBtn = document.getElementById("saveSettingsBtn");
   const openSettingsBtn = document.getElementById("openSettingsBtn");
   
@@ -609,6 +616,9 @@
     REDIRECT_URI = localStorage.getItem("sj_redirect_uri") || "";
     PARTY_PLAYLIST_ID = localStorage.getItem("sj_playlist_id") || "";
     APP_TITLE = localStorage.getItem("sj_app_title") || "Social JukeBox";
+    
+    // Default Speaker List
+    SPEAKER_NAMES = localStorage.getItem("sj_speaker_names") || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     
     // Set UI Title
     appTitleDisplay.textContent = `🎧 ${APP_TITLE}`;
@@ -625,6 +635,7 @@
     cfgRedirect.value = REDIRECT_URI;
     cfgPlaylistId.value = PARTY_PLAYLIST_ID;
     cfgAppTitle.value = APP_TITLE;
+    cfgSpeakerNames.value = SPEAKER_NAMES;
     
     // Set Version text
     versionText.textContent = `Version: ${VERSION_NUM}`;
@@ -643,6 +654,9 @@
     
     const newTitle = cfgAppTitle.value.trim() || "Social JukeBox";
     localStorage.setItem("sj_app_title", newTitle);
+    
+    const newSpeakers = cfgSpeakerNames.value.trim();
+    if(newSpeakers) localStorage.setItem("sj_speaker_names", newSpeakers);
     
     location.reload(); 
   });
@@ -825,6 +839,7 @@
 
     if (!code) return;
 
+    // We need REDIRECT_URI to perform the swap
     if (!REDIRECT_URI) loadSettings();
 
     window.history.replaceState({}, document.title, REDIRECT_URI);
@@ -898,25 +913,36 @@
 
     if (devices.length === 0) return null;
 
-    const allowedNames = ["basement", "family", "sonos", "symfonisk", "beam", "arc", "move", "roam"];
+    // Parse User's Speaker List
+    const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
+    const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     
+    // 1. Try to find an ACTIVE device that matches our allowed names
     let target = devices.find(d => {
+        if (isPhoneOrComputer(d)) return false;
+        const n = d.name.toLowerCase();
+        return d.is_active && allowedNames.some(k => n.includes(k));
+    });
+    if (target) return target;
+
+    // 2. Try to find ANY active speaker
+    target = devices.find(d => d.is_active && !isPhoneOrComputer(d));
+    if (target) return target;
+
+    // 3. Fallback to IDLE devices matching names
+    target = devices.find(d => {
         if (isPhoneOrComputer(d)) return false;
         const n = d.name.toLowerCase();
         return allowedNames.some(k => n.includes(k));
     });
-
     if (target) return target;
 
+    // 4. Fallback to any idle speaker
     target = devices.find(d => {
         if (isPhoneOrComputer(d)) return false;
         const type = d.type.toLowerCase();
         return type === 'speaker' || type === 'castaudio' || type === 'avr' || type === 'audio_dongle';
     });
-    
-    if (target) return target;
-
-    target = devices.find(d => d.is_active && !isPhoneOrComputer(d));
 
     return target || null;
   }
@@ -947,7 +973,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -1122,14 +1148,14 @@
   async function executeSwitch(deviceId, offsetUri) {
      try {
         // AGGRESSIVE SWITCH:
-        // 1. Transfer Playback first (Forces device to wake/grab focus)
+        // 1. Transfer Playback + PAUSE (Breaks radio connection)
         await fetchWithAuth("https://api.spotify.com/v1/me/player", {
             method: "PUT",
-            body: JSON.stringify({ device_ids: [deviceId] })
+            body: JSON.stringify({ device_ids: [deviceId], play: false })
         });
 
-        // 2. Short wait for transfer
-        await new Promise(r => setTimeout(r, 300));
+        // 2. Wait for Transfer
+        await new Promise(r => setTimeout(r, 500));
 
         // 3. Play Playlist
         const body = { context_uri: PLAYLIST_URI };
