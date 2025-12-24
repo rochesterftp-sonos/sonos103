@@ -459,8 +459,15 @@
 <div class="app">
   
   <div class="settings-modal" id="settingsModal" style="display:none;">
-    <div class="title" style="margin-bottom:10px;">⚙️ Setup JukeBox</div>
+    <div class="title" style="margin-bottom:10px;">⚙️ Setup</div>
     <div class="settings-card">
+      <div>
+        <label class="settings-label">Jukebox Name</label>
+        <input id="cfgAppTitle" class="input" type="text" placeholder="e.g. Social JukeBox" />
+      </div>
+      
+      <div style="border-top:1px solid rgba(255,255,255,0.1); margin:10px 0;"></div>
+
       <div>
         <label class="settings-label">Spotify Client ID</label>
         <input id="cfgClientId" class="input" type="text" placeholder="e.g. b48fe08..." />
@@ -470,21 +477,21 @@
         <input id="cfgRedirect" class="input" type="text" placeholder="e.g. https://yourname.github.io/jukebox/" />
       </div>
       <div>
-        <label class="settings-label">Playlist ID (Copy from Spotify Share Link)</label>
+        <label class="settings-label">Playlist ID</label>
         <input id="cfgPlaylistId" class="input" type="text" placeholder="e.g. 3oHuSCHOpiA..." />
       </div>
       <div style="display:flex; gap:10px; margin-top:10px;">
         <button class="btn btn-primary" style="flex:1;" id="saveSettingsBtn">Save & Start</button>
       </div>
-      <div style="font-size:0.8rem; color:#6b7280; text-align:center;">
-        These are saved to your device browser.
+      <div style="font-size:0.8rem; color:#6b7280; text-align:center; margin-top:5px;">
+        Settings saved to device. <span id="versionText"></span>
       </div>
     </div>
   </div>
 
   <header>
     <div class="title-block">
-      <div class="title">
+      <div class="title" id="appTitleDisplay">
         🎧 Social JukeBox
       </div>
       <div class="tagline">
@@ -569,32 +576,49 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
+  const VERSION_NUM = "v1.2"; // Manually update this when changing code
+  
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
   let PARTY_PLAYLIST_ID = "";
   let PLAYLIST_URI = "";
+  let APP_TITLE = "Social JukeBox";
 
   const settingsModal = document.getElementById("settingsModal");
   const cfgClientId = document.getElementById("cfgClientId");
   const cfgRedirect = document.getElementById("cfgRedirect");
   const cfgPlaylistId = document.getElementById("cfgPlaylistId");
+  const cfgAppTitle = document.getElementById("cfgAppTitle");
   const saveSettingsBtn = document.getElementById("saveSettingsBtn");
   const openSettingsBtn = document.getElementById("openSettingsBtn");
+  
+  const appTitleDisplay = document.getElementById("appTitleDisplay");
+  const versionText = document.getElementById("versionText");
 
   function loadSettings() {
     SPOTIFY_CLIENT_ID = localStorage.getItem("sj_client_id") || "";
     REDIRECT_URI = localStorage.getItem("sj_redirect_uri") || "";
     PARTY_PLAYLIST_ID = localStorage.getItem("sj_playlist_id") || "";
+    APP_TITLE = localStorage.getItem("sj_app_title") || "Social JukeBox";
     
+    // Set UI Title
+    appTitleDisplay.textContent = `🎧 ${APP_TITLE}`;
+    
+    // Clean playlist ID if it contains 'spotify:playlist:'
     if (PARTY_PLAYLIST_ID.includes(":")) {
         PARTY_PLAYLIST_ID = PARTY_PLAYLIST_ID.split(":").pop();
     }
     
     PLAYLIST_URI = `spotify:playlist:${PARTY_PLAYLIST_ID}`;
 
+    // Populate Settings Fields
     cfgClientId.value = SPOTIFY_CLIENT_ID;
     cfgRedirect.value = REDIRECT_URI;
     cfgPlaylistId.value = PARTY_PLAYLIST_ID;
+    cfgAppTitle.value = APP_TITLE;
+    
+    // Set Version text
+    versionText.textContent = `Version: ${VERSION_NUM}`;
 
     if (!SPOTIFY_CLIENT_ID || !REDIRECT_URI || !PARTY_PLAYLIST_ID) {
       settingsModal.style.display = "flex";
@@ -607,6 +631,10 @@
     localStorage.setItem("sj_client_id", cfgClientId.value.trim());
     localStorage.setItem("sj_redirect_uri", cfgRedirect.value.trim());
     localStorage.setItem("sj_playlist_id", cfgPlaylistId.value.trim());
+    
+    const newTitle = cfgAppTitle.value.trim() || "Social JukeBox";
+    localStorage.setItem("sj_app_title", newTitle);
+    
     location.reload(); 
   });
 
@@ -614,6 +642,7 @@
     settingsModal.style.display = "flex";
   });
 
+  // Auto-remove the last played track from the playlist when the song changes
   const AUTO_REMOVE_PLAYED = true;
 
   const SPOTIFY_SCOPES = [
@@ -630,6 +659,7 @@
   let nowPlayingIntervalId = null;
   let lastTrackUri = null;
   
+  // For Smooth Switching
   let switchTimer = null;
   let switchInterval = null;
 
@@ -786,6 +816,7 @@
 
     if (!code) return;
 
+    // We need REDIRECT_URI to perform the swap
     if (!REDIRECT_URI) loadSettings();
 
     window.history.replaceState({}, document.title, REDIRECT_URI);
@@ -840,10 +871,12 @@
     // PHASE 1: Check "What is currently playing?"
     try {
         const playRes = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-        if (playRes.status === 200) { 
+        if (playRes.status === 200) { // 200 = Active
             const playData = await playRes.json();
             const d = playData.device;
+            
             if (d && !isPhoneOrComputer(d)) {
+                console.log("Found Active Speaker via Playback State:", d.name);
                 return d;
             }
         }
