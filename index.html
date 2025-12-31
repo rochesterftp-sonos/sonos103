@@ -14,6 +14,8 @@
       --accent-text: #bbf7d0;
       --danger: #f97373;
       --danger-soft: rgba(248, 113, 113, 0.2);
+      --top-btn: #8b5cf6; /* Purple for Top button */
+      --top-btn-soft: rgba(139, 92, 246, 0.2);
       --text: #e5e7eb;
       --text-dim: #9ca3af;
       --radius-lg: 22px;
@@ -171,16 +173,6 @@
       padding: 8px 12px;
       font-size: .85rem;
     }
-    .btn-cancel {
-        background: rgba(248, 113, 113, 0.15);
-        color: #fca5a5;
-        border-color: rgba(248, 113, 113, 0.4);
-    }
-    .btn-skip {
-        background: rgba(34, 197, 94, 0.15);
-        color: #86efac;
-        border-color: rgba(34, 197, 94, 0.4);
-    }
 
     /* NOW PLAYING CARD */
     .now-playing {
@@ -195,18 +187,6 @@
       position: relative;
       overflow: hidden;
       flex-shrink: 0;
-    }
-    /* Pending Switch Overlay */
-    .pending-overlay {
-      position: absolute;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(2, 6, 23, 0.95);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 20px;
-      z-index: 10;
-      backdrop-filter: blur(8px);
     }
     
     .np-art {
@@ -276,8 +256,8 @@
       }
       .col {
         flex: 1 1 0px; 
-        width: 50%;     
-        min-width: 0;   
+        width: 50%;      
+        min-width: 0;    
         display: flex;
         flex-direction: column;
       }
@@ -344,6 +324,7 @@
       overflow-y: auto;
       margin-top: 4px;
       flex: 1;
+      scroll-behavior: smooth;
     }
 
     .track-row {
@@ -441,6 +422,24 @@
     .btn-mini:hover {
       background: rgba(31,41,55,0.95);
     }
+    
+    /* TOP BUTTON STYLE */
+    .btn-top {
+      min-width: 40px;
+      min-height: 32px;
+      padding: 4px 10px;
+      font-size: .75rem;
+      font-weight: 700;
+      box-shadow: none;
+      background: var(--top-btn-soft);
+      color: #c4b5fd;
+      border-radius: 999px;
+      border: 1px solid rgba(139, 92, 246, 0.4);
+      margin-right: 4px;
+    }
+    .btn-top:hover {
+      background: rgba(139, 92, 246, 0.3);
+    }
 
     /* MSG POP EFFECT */
     .msg {
@@ -532,16 +531,6 @@
   </header>
 
   <section class="now-playing" id="nowPlayingCard">
-    <div id="pendingOverlay" class="pending-overlay" style="display:none;">
-      <div style="color: var(--accent-text); font-weight:600; font-size:0.95rem;">
-        ⌛ Switching to JukeBox in <span id="pendingTimer">0:00</span>...
-      </div>
-      <div style="display:flex; gap:8px;">
-        <button class="btn btn-skip btn-sm" id="skipSwitchBtn">⚡ Skip</button>
-        <button class="btn btn-cancel btn-sm" id="cancelSwitchBtn">Cancel</button>
-      </div>
-    </div>
-
     <div class="np-art" id="nowPlayingArt"></div>
     <div class="np-content">
       <div class="np-title" id="nowPlayingTitle">Not playing</div>
@@ -583,7 +572,6 @@
             <div class="panel-subtitle">Shared queue</div>
           </div>
           <div class="playlist-controls">
-            <button class="btn btn-primary btn-sm" id="forcePlayBtn">▶ Start JukeBox</button>
             <button class="btn btn-ghost btn-sm" id="refreshPlaylistBtn">Refresh</button>
           </div>
         </div>
@@ -598,7 +586,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.2 (Fixed Device Logic)"; 
+  const VERSION_NUM = "v2.3 (No Force Btn + Top Btn)"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -684,10 +672,8 @@
   let nowPlayingIntervalId = null;
   let lastTrackUri = null;
   
-  let switchTimer = null;
-  let switchInterval = null;
-  let pendingDeviceId = null;
-  let pendingOffsetUri = null;
+  // NOTE: Switch/Drift logic remains for auto-correction, 
+  // but button to trigger it manually is removed.
 
   /**************************************************************
    * AUTH + TOKEN HELPERS
@@ -889,7 +875,7 @@
   }
 
   /**************************************************************
-   * DEVICE FINDER HELPER (FIXED LOGIC)
+   * DEVICE FINDER HELPER
    **************************************************************/
   async function findBestSpeakerDevice() {
     const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
@@ -905,19 +891,18 @@
     const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
     
-    // --- UPDATED PRIORITY LOGIC (v2.2) ---
-    // 1. PRIORITY: The device currently playing music (Prevent Hijack!)
+    // 1. PRIORITY: The device currently playing music
     let target = speakers.find(d => d.is_active);
     if (target) return target;
 
-    // 2. PRIORITY: Match Name in SPEAKER list (Fallback if nothing is playing)
+    // 2. PRIORITY: Match Name in SPEAKER list
     target = speakers.find(d => {
         const n = d.name.toLowerCase();
         return allowedNames.some(k => n.includes(k));
     });
     if (target) return target;
     
-    // 3. PRIORITY: Any Inactive Speaker (First one found)
+    // 3. PRIORITY: Any Inactive Speaker
     if (speakers.length > 0) return speakers[0];
 
     // 4. LAST RESORT: Phone/Computer
@@ -1035,173 +1020,30 @@
       searchMessage.textContent = "Failed to add track. Check connection.";
       return; // Stop here if failed
     }
-
-    // 2) NON-CRITICAL: Player State & Drift Logic
-    try {
-      const st = await fetchWithAuth("https://api.spotify.com/v1/me/player");
-      if (st.status === 204) {
-         // Nothing playing -> Try start
-         const targetDevice = await findBestSpeakerDevice();
-         if (targetDevice) await executeSwitch(targetDevice.id, track.uri);
-      } else {
-         const state = await st.json();
-         const contextUri = state?.context?.uri || "";
-         
-         if (contextUri !== PLAYLIST_URI) {
-            // DRIFTED -> Switch back
-            let targetDeviceId = state.device.id;
-            
-            // Re-evaluate best device (in case we are on phone)
-            const bestDevice = await findBestSpeakerDevice();
-            if (bestDevice) targetDeviceId = bestDevice.id;
-            
-            const progress = state.progress_ms || 0;
-            const duration = state.item?.duration_ms || 0;
-            const remainingMs = duration - progress;
-            
-            initiateSmoothSwitch(targetDeviceId, remainingMs, track.uri);
-         }
-      }
-    } catch (err) {
-       console.warn("Background update failed (non-fatal):", err);
-    }
-
+    
     // 3) REFRESH (Double tap to catch Spotify lag)
     await refreshPlaylistView();
-    setTimeout(() => refreshPlaylistView(), 1500);
+    setTimeout(async () => {
+         await refreshPlaylistView();
+         // SCROLL TO BOTTOM TO SHOW NEW TRACK
+         const container = document.getElementById("playlistView");
+         container.scrollTop = container.scrollHeight;
+    }, 1500);
   }
 
-  /**************************************************************
-   * FORCE PLAY BUTTON (SMOOTH SWITCH LOGIC)
-   **************************************************************/
-  const forcePlayBtn = document.getElementById("forcePlayBtn");
-  const pendingOverlay = document.getElementById("pendingOverlay");
-  const pendingTimer = document.getElementById("pendingTimer");
-  const cancelSwitchBtn = document.getElementById("cancelSwitchBtn");
-  const skipSwitchBtn = document.getElementById("skipSwitchBtn");
-  
-  function cancelSmoothSwitch() {
-    if (switchTimer) clearTimeout(switchTimer);
-    if (switchInterval) clearInterval(switchInterval);
-    switchTimer = null;
-    switchInterval = null;
-    pendingOverlay.style.display = "none";
-    playlistMessage.textContent = "Switch cancelled.";
-  }
-  
-  cancelSwitchBtn.addEventListener("click", cancelSmoothSwitch);
-  
-  skipSwitchBtn.addEventListener("click", () => {
-      if (pendingDeviceId) {
-          executeSwitch(pendingDeviceId, pendingOffsetUri);
-          cancelSmoothSwitch();
-      }
-  });
-
-  function formatTime(ms) {
-    const totalSec = Math.floor(ms / 1000);
-    const m = Math.floor(totalSec / 60);
-    const s = totalSec % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }
-
-  async function initiateSmoothSwitch(deviceId, delayMs, specificTrackUri = null) {
-    cancelSmoothSwitch(); 
-    
-    pendingDeviceId = deviceId;
-    pendingOffsetUri = specificTrackUri;
-
-    // Trigger 3 seconds EARLY to beat the radio
-    const safeDelay = delayMs - 3000;
-
-    if (safeDelay < 2000) {
-       await executeSwitch(deviceId, specificTrackUri);
-       return;
-    }
-
-    pendingOverlay.style.display = "flex";
-    
-    let timeLeft = delayMs;
-    pendingTimer.textContent = formatTime(timeLeft);
-    
-    switchInterval = setInterval(() => {
-      timeLeft -= 1000;
-      if (timeLeft < 0) timeLeft = 0;
-      pendingTimer.textContent = formatTime(timeLeft);
-    }, 1000);
-
-    switchTimer = setTimeout(async () => {
-      await executeSwitch(deviceId, specificTrackUri);
-      cancelSmoothSwitch(); 
-    }, safeDelay); 
-  }
-  
+  // --- HELPER FOR BACKGROUND SWITCHING (Auto-Drift Only) ---
   async function executeSwitch(deviceId, offsetUri) {
      try {
-        console.log("Switching to device:", deviceId);
-        
-        // 1. Force Transfer with PLAY:TRUE (Wakes up device)
-        await fetchWithAuth("https://api.spotify.com/v1/me/player", {
-            method: "PUT",
-            body: JSON.stringify({ device_ids: [deviceId], play: true })
-        });
-
-        // 2. Wait 1s for device to wake
-        await new Promise(r => setTimeout(r, 1000));
-
-        // 3. Play Playlist (Overwrite stream)
         const body = { context_uri: PLAYLIST_URI };
-        if (offsetUri) {
-           body.offset = { uri: offsetUri };
-        }
+        if (offsetUri) body.offset = { uri: offsetUri };
         
         await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
             method: "PUT",
             body: JSON.stringify(body)
         });
-        
-        playlistMessage.textContent = "Jukebox Started!";
-        setTimeout(refreshNowPlaying, 1000);
-     } catch(e) {
-        console.error("Switch failed", e);
-        playlistMessage.textContent = "Failed to switch. Retrying...";
-        
-        // Retry once after another second
-        setTimeout(async () => {
-             const body = { context_uri: PLAYLIST_URI };
-             if (offsetUri) body.offset = { uri: offsetUri };
-             await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-                method: "PUT",
-                body: JSON.stringify(body)
-            });
-        }, 1000);
-     }
+     } catch(e) { console.error("Switch failed", e); }
   }
 
-  forcePlayBtn.addEventListener("click", async () => {
-    // INSTANT FORCE PLAY (No Countdown)
-    playlistMessage.textContent = "Locating Sonos...";
-    
-    try {
-        const targetDevice = await findBestSpeakerDevice();
-
-        if (!targetDevice) {
-           alert("No Sonos/Speakers found.\n\nTip: Make sure your Sonos is playing from SPOTIFY, not another app, to appear in this list.");
-           playlistMessage.textContent = "No speakers found.";
-           return;
-        }
-
-        const deviceId = targetDevice.id;
-        playlistMessage.textContent = `Targeting: ${targetDevice.name}`;
-        
-        // Bypass checks, just force it
-        await executeSwitch(deviceId, null);
-
-    } catch (err) {
-        console.error(err);
-        playlistMessage.textContent = "Error checking status.";
-    }
-  });
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
@@ -1267,6 +1109,20 @@
         const reorderRow = document.createElement("div");
         reorderRow.className = "track-reorder";
 
+        // --- NEW "TOP" BUTTON ---
+        const topBtn = document.createElement("button");
+        topBtn.className = "btn-top";
+        topBtn.textContent = "TOP";
+        topBtn.title = "Move to Top";
+        // Disable if already at top
+        topBtn.disabled = index === 0;
+        topBtn.onclick = (e) => {
+             e.stopPropagation();
+             moveToTop(index);
+        };
+        reorderRow.appendChild(topBtn);
+        // ------------------------
+
         const upBtn = document.createElement("button");
         upBtn.className = "btn-mini";
         upBtn.textContent = "↑";
@@ -1307,6 +1163,29 @@
       console.error(err);
       playlistMessage.textContent = "Error loading playlist.";
     }
+  }
+
+  async function moveToTop(position) {
+      if (lastSnapshotId === null) return;
+      try {
+        const res = await fetchWithAuth(
+          `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
+          {
+            method: "PUT",
+            body: JSON.stringify({
+              range_start: position,
+              range_length: 1,
+              insert_before: 0, // 0 = TOP OF LIST
+              snapshot_id: lastSnapshotId,
+            }),
+          }
+        );
+        const data = await res.json();
+        lastSnapshotId = data.snapshot_id || lastSnapshotId;
+        await refreshPlaylistView();
+      } catch (err) {
+        console.error("Move to top error:", err);
+      }
   }
 
   async function moveTrack(position, delta) {
