@@ -328,13 +328,13 @@
     
     .track-right {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
-      align-items: flex-end;
-      justify-content: center;
+      /* CHANGE: Use row instead of column to put buttons side-by-side */
+      flex-direction: row; 
+      gap: 8px;
+      align-items: center;
+      justify-content: flex-end;
       flex-shrink: 0;
     }
-    .track-reorder { display: flex; gap: 4px; }
 
     .btn-icon {
       border-radius: 999px;
@@ -361,6 +361,7 @@
       background: var(--danger-soft);
       color: #fecaca;
       box-shadow: 0 0 0 1px rgba(248,113,113,0.3);
+      min-width: 40px; /* Smaller width for icon only if needed, but text is fine */
     }
     .btn-remove:hover { background: rgba(248,113,113,0.35); transform: translateY(-1px); }
     
@@ -376,7 +377,6 @@
       color: #c4b5fd;
       border-radius: 999px;
       border: 1px solid rgba(139, 92, 246, 0.4);
-      margin-right: 4px;
       cursor: pointer;
     }
     .btn-top:hover { background: rgba(139, 92, 246, 0.3); }
@@ -444,7 +444,7 @@
     <div class="title-block">
       <div class="title" id="appTitleContainer">
          <span id="appTitleText">Three Tails Tavern Bitchen Jukebox</span>
-         <span class="version-tag" id="versionTag">v2.6</span>
+         <span class="version-tag" id="versionTag">v2.7</span>
       </div>
       <div class="tagline">Queue songs on the host's Sonos.</div>
     </div>
@@ -518,7 +518,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.6"; 
+  const VERSION_NUM = "v2.7"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -979,31 +979,28 @@
         const right = document.createElement("div");
         right.className = "track-right";
 
-        const reorderRow = document.createElement("div");
-        reorderRow.className = "track-reorder";
-
+        // --- NEW "BOOST" BUTTON (Index 3) ---
         const topBtn = document.createElement("button");
         topBtn.className = "btn-top";
-        topBtn.textContent = "TOP";
-        topBtn.title = "Move to Top & Play Next";
-        topBtn.disabled = index === 0;
+        topBtn.textContent = "BOOST";
+        topBtn.title = "Move to Position 4 (Up Next)";
+        // Disable if already in top 4
+        topBtn.disabled = index < 3;
         topBtn.onclick = (e) => {
              e.stopPropagation();
-             moveToTop(index, t.uri);
+             moveToPosition4(index);
         };
-        reorderRow.appendChild(topBtn);
-
-        // REMOVED UP/DOWN ARROWS HERE
+        right.appendChild(topBtn);
 
         const removeBtn = document.createElement("button");
         removeBtn.className = "btn-icon btn-remove";
-        removeBtn.innerHTML = "🗑 Remove";
+        removeBtn.innerHTML = "🗑";
+        removeBtn.title = "Remove";
         removeBtn.onclick = (e) => {
           e.stopPropagation();
           removeTrackFromParty(index, t.uri);
         };
 
-        right.appendChild(reorderRow);
         right.appendChild(removeBtn);
 
         row.appendChild(main);
@@ -1016,47 +1013,37 @@
     }
   }
 
-  // --- SAFE MOVE-TO-TOP FUNCTION ---
-  async function moveToTop(position, trackUri) {
+  // --- MOVE TO POSITION 4 (Index 3) ---
+  async function moveToPosition4(currentIndex) {
       if (lastSnapshotId === null) return;
-      playlistMessage.textContent = "Moving to top...";
+      playlistMessage.textContent = "Boosting track...";
       
       try {
-        // 1. Move visuals to top
+        // We want to insert it at index 3 (Position 4).
+        // insert_before: 3 means it takes index 3.
         const res = await fetchWithAuth(
           `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
           {
             method: "PUT",
             body: JSON.stringify({
-              range_start: position,
+              range_start: currentIndex,
               range_length: 1,
-              insert_before: 0, 
+              insert_before: 3, 
               snapshot_id: lastSnapshotId,
             }),
           }
         );
         const data = await res.json();
         lastSnapshotId = data.snapshot_id || lastSnapshotId;
+        playlistMessage.textContent = "Track Boosted!";
       } catch (err) {
-        console.error("Move to top error:", err);
-        playlistMessage.textContent = "Error moving track.";
+        console.error("Boost error:", err);
+        playlistMessage.textContent = "Error boosting track.";
         return; 
       }
       
-      // 2. Queue in Audio (Fail Safe)
-      try {
-          await fetchWithAuth(
-            `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(trackUri)}`,
-            { method: "POST" }
-          );
-          playlistMessage.textContent = "Moved to top & Queued next!";
-      } catch (err) {
-          console.warn("Queue failed (Device sleeping or invisible):", err);
-          playlistMessage.textContent = "Moved to top (Queue skipped)";
-      }
-
-      // Small delay to prevent jumpiness
-      await new Promise(r => setTimeout(r, 500));
+      // Delay to avoid jumpiness
+      await new Promise(r => setTimeout(r, 600));
       await refreshPlaylistView();
   }
 
