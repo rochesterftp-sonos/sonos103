@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <style>
-:root{
+:root {
   --bg:#020617;
   --card:#02081a;
   --border:#1f2937;
@@ -92,15 +92,8 @@ button.primary{
   padding:12px;
   min-height:0;
 }
-.panel h2{
-  margin:0;
-  font-size:1.1rem;
-}
-.search-row{
-  display:flex;
-  gap:8px;
-  margin-top:8px;
-}
+.panel h2{margin:0;font-size:1.1rem}
+.search-row{display:flex;gap:8px;margin-top:8px}
 .list{
   margin-top:10px;
   flex:1;
@@ -117,28 +110,11 @@ button.primary{
   border-radius:12px;
 }
 .track:hover{background:#1f2937}
-.track-main{
-  flex:1;
-  overflow:hidden;
-}
-.track-title{
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-.track-sub{
-  font-size:.8rem;
-  color:var(--text-dim);
-}
-.track-actions{
-  display:flex;
-  gap:6px;
-}
-.small{
-  font-size:.8rem;
-  color:var(--text-dim);
-  margin-top:6px;
-}
+.track-main{flex:1;overflow:hidden}
+.track-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track-sub{font-size:.8rem;color:var(--text-dim)}
+.track-actions{display:flex;gap:6px}
+.small{font-size:.8rem;color:var(--text-dim);margin-top:6px}
 </style>
 </head>
 
@@ -160,7 +136,6 @@ button.primary{
 
 <div class="layout">
 
-<!-- SEARCH -->
 <div class="panel">
   <h2>Search Music</h2>
   <div class="search-row">
@@ -171,7 +146,6 @@ button.primary{
   <div class="small" id="searchMsg"></div>
 </div>
 
-<!-- PLAYLIST -->
 <div class="panel">
   <h2>Party Playlist</h2>
   <div class="list" id="playlist"></div>
@@ -182,7 +156,6 @@ button.primary{
 </div>
 
 <script>
-/* ================= CONFIG ================= */
 const VERSION="v2.3 – Playlist-First Stable";
 const SCOPES=[
 "playlist-read-private",
@@ -192,11 +165,10 @@ const SCOPES=[
 "user-read-currently-playing"
 ];
 
-const CLIENT_ID=localStorage.getItem("tt_client");
-const REDIRECT_URI=localStorage.getItem("tt_redirect");
-const PLAYLIST_ID=localStorage.getItem("tt_playlist");
+const CLIENT_ID=localStorage.getItem("sj_client_id");
+const REDIRECT_URI=localStorage.getItem("sj_redirect_uri");
+const PLAYLIST_ID=localStorage.getItem("sj_playlist_id");
 
-/* ================ AUTH ================= */
 const authDot=document.getElementById("authDot");
 const authText=document.getElementById("authText");
 const loginBtn=document.getElementById("loginBtn");
@@ -209,10 +181,10 @@ function setAuth(ok){
  logoutBtn.style.display=ok?"inline":"none";
 }
 
-function token(){return JSON.parse(localStorage.getItem("tt_token")||"null")}
+function tokens(){return JSON.parse(localStorage.getItem("sj_spotify_tokens")||"null")}
 
 async function api(url,opt={}){
- const t=token();
+ const t=tokens();
  if(!t) throw "Not authed";
  opt.headers=Object.assign(opt.headers||{},{
   Authorization:"Bearer "+t.access_token,
@@ -223,7 +195,7 @@ async function api(url,opt={}){
  return r.json();
 }
 
-/* ================ SEARCH ================= */
+/* ===== SEARCH ===== */
 const searchBtn=document.getElementById("searchBtn");
 const searchResults=document.getElementById("searchResults");
 const searchMsg=document.getElementById("searchMsg");
@@ -251,7 +223,7 @@ searchBtn.onclick=async()=>{
  searchMsg.textContent="Tap ➕ to add";
 };
 
-/* ================ PLAYLIST ================= */
+/* ===== PLAYLIST ===== */
 const playlistEl=document.getElementById("playlist");
 const playlistMsg=document.getElementById("playlistMsg");
 let snapshot=null;
@@ -312,10 +284,13 @@ async function removeTrack(pos,uri){
  await loadPlaylist();
 }
 
-/* ================ INIT ================= */
+/* ===== INIT ===== */
 (async()=>{
- const t=token();
- if(t){setAuth(true);await loadPlaylist();}
+ const t=tokens();
+ if(t){
+  setAuth(true);
+  await loadPlaylist();
+ }
 })();
 </script>
 </body>
