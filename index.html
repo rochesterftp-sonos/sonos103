@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Social JukeBox</title>
+  <title>Three Tails Tavern Bitchen Jukebox</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root {
@@ -14,7 +14,7 @@
       --accent-text: #bbf7d0;
       --danger: #f97373;
       --danger-soft: rgba(248, 113, 113, 0.2);
-      --top-btn: #8b5cf6; /* Purple for Top button */
+      --top-btn: #8b5cf6;
       --top-btn-soft: rgba(139, 92, 246, 0.2);
       --text: #e5e7eb;
       --text-dim: #9ca3af;
@@ -88,17 +88,27 @@
     .title-block {
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 2px;
     }
     .title {
-      font-size: 1.4rem;
+      font-size: 1.3rem;
       font-weight: 700;
       display: flex;
-      align-items: center;
+      align-items: baseline;
       gap: 8px;
+      flex-wrap: wrap;
+    }
+    .version-tag {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-weight: 400;
+      opacity: 0.7;
+      border: 1px solid rgba(148,163,184,0.3);
+      padding: 1px 6px;
+      border-radius: 6px;
     }
     .tagline {
-      font-size: .9rem;
+      font-size: .85rem;
       color: var(--text-dim);
     }
     .status-area {
@@ -154,25 +164,14 @@
       transition: background .12s ease, transform .06s ease, box-shadow .12s ease;
     }
     .btn:hover { background: rgba(31,41,55,0.95); transform: translateY(-1px); }
-    .btn:active { transform: translateY(0); box-shadow: none; }
     .btn-primary {
       background: linear-gradient(135deg, #22c55e, #16a34a);
       border-color: #22c55e;
       color: #022c22;
       box-shadow: 0 8px 24px rgba(34,197,94,0.5);
     }
-    .btn-primary:hover {
-      background: linear-gradient(135deg, #4ade80, #22c55e);
-    }
-    .btn-ghost {
-      background: transparent;
-      border-color: rgba(148,163,184,0.5);
-    }
-    .btn-sm {
-      min-width: 80px;
-      padding: 8px 12px;
-      font-size: .85rem;
-    }
+    .btn-ghost { background: transparent; border-color: rgba(148,163,184,0.5); }
+    .btn-sm { min-width: 80px; padding: 8px 12px; font-size: .85rem; }
 
     /* NOW PLAYING CARD */
     .now-playing {
@@ -188,7 +187,6 @@
       overflow: hidden;
       flex-shrink: 0;
     }
-    
     .np-art {
       width: 78px;
       height: 78px;
@@ -225,11 +223,6 @@
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
-    }
-    .np-meta span {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
     }
     .np-status-pill {
       padding: 3px 8px;
@@ -282,27 +275,11 @@
       flex-wrap: wrap;
       flex-shrink: 0;
     }
-    .panel-title {
-      font-size: 1.05rem;
-      font-weight: 600;
-    }
-    .panel-subtitle {
-      font-size: .85rem;
-      color: var(--text-dim);
-      margin-top: 2px;
-    }
+    .panel-title { font-size: 1.05rem; font-weight: 600; }
+    .panel-subtitle { font-size: .85rem; color: var(--text-dim); margin-top: 2px; }
 
-    .search-bar {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-    .input-row {
-      display: flex;
-      gap: 8px;
-      align-items: stretch;
-    }
+    .search-bar { display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    .input-row { display: flex; gap: 8px; align-items: stretch; }
     .input {
       flex: 1;
       border-radius: 999px;
@@ -314,8 +291,6 @@
       outline: none;
       min-height: 44px;
     }
-    .input::placeholder { color: #6b7280; }
-
     .tracks-list {
       border-radius: var(--radius-md);
       border: 1px solid rgba(31,41,55,0.95);
@@ -338,10 +313,7 @@
       min-height: 52px;
       max-width: 100%;
     }
-    .track-row:hover {
-      background: rgba(31,41,55,0.95);
-      transform: translateY(-1px);
-    }
+    .track-row:hover { background: rgba(31,41,55,0.95); transform: translateY(-1px); }
     
     .track-main {
       flex: 1;
@@ -351,20 +323,8 @@
       gap: 2px;
       overflow: hidden;
     }
-    .track-title {
-      font-size: .98rem;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .track-sub {
-      font-size: .8rem;
-      color: var(--text-dim);
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+    .track-title { font-size: .98rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .track-sub { font-size: .8rem; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     
     .track-right {
       display: flex;
@@ -374,10 +334,7 @@
       justify-content: center;
       flex-shrink: 0;
     }
-    .track-reorder {
-      display: flex;
-      gap: 4px;
-    }
+    .track-reorder { display: flex; gap: 4px; }
 
     .btn-icon {
       border-radius: 999px;
@@ -392,9 +349,7 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      touch-action: manipulation;
-      -webkit-tap-highlight-color: transparent;
-      transition: background .08s ease, transform .04s ease, box-shadow .08s ease;
+      transition: background .08s ease;
     }
     .btn-add {
       background: var(--accent-soft);
@@ -419,9 +374,7 @@
       border-radius: 999px;
       border: 1px solid rgba(55,65,81,0.9);
     }
-    .btn-mini:hover {
-      background: rgba(31,41,55,0.95);
-    }
+    .btn-mini:hover { background: rgba(31,41,55,0.95); }
     
     /* TOP BUTTON STYLE */
     .btn-top {
@@ -437,11 +390,8 @@
       border: 1px solid rgba(139, 92, 246, 0.4);
       margin-right: 4px;
     }
-    .btn-top:hover {
-      background: rgba(139, 92, 246, 0.3);
-    }
+    .btn-top:hover { background: rgba(139, 92, 246, 0.3); }
 
-    /* MSG POP EFFECT */
     .msg {
       font-size: .82rem;
       color: var(--text-dim);
@@ -452,20 +402,13 @@
     }
     .msg.pop {
       font-size: 1.15rem;
-      color: #4ade80; /* bright green */
+      color: #4ade80;
       font-weight: 700;
       transform: scale(1.05);
       text-shadow: 0 0 15px rgba(74, 222, 128, 0.6);
       padding: 6px 0;
     }
-    .msg.error { color: var(--danger); }
-    
-    .playlist-controls {
-      display:flex; 
-      gap:8px; 
-      align-items:center;
-      flex-wrap: wrap;
-    }
+    .playlist-controls { display:flex; gap:8px; align-items:center; flex-wrap: wrap; }
   </style>
 </head>
 <body>
@@ -476,7 +419,7 @@
     <div class="settings-card">
       <div>
         <label class="settings-label">Jukebox Name</label>
-        <input id="cfgAppTitle" class="input" type="text" placeholder="e.g. Social JukeBox" />
+        <input id="cfgAppTitle" class="input" type="text" placeholder="e.g. Three Tails Tavern Bitchen Jukebox" />
       </div>
       
       <div>
@@ -509,12 +452,11 @@
 
   <header>
     <div class="title-block">
-      <div class="title" id="appTitleDisplay">
-        🎧 Social JukeBox
+      <div class="title" id="appTitleContainer">
+         <span id="appTitleText">Three Tails Tavern Bitchen Jukebox</span>
+         <span class="version-tag" id="versionTag">v2.5</span>
       </div>
-      <div class="tagline">
-        Queue songs on the host's Sonos.
-      </div>
+      <div class="tagline">Queue songs on the host's Sonos.</div>
     </div>
     <div class="status-area">
       <div class="status-chip" id="authStatusChip">
@@ -586,13 +528,13 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.4 (Play Next Fix)"; 
+  const VERSION_NUM = "v2.5"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
   let PARTY_PLAYLIST_ID = "";
   let PLAYLIST_URI = "";
-  let APP_TITLE = "Social JukeBox";
+  let APP_TITLE = "Three Tails Tavern Bitchen Jukebox";
   let SPEAKER_NAMES = "";
 
   const settingsModal = document.getElementById("settingsModal");
@@ -604,18 +546,20 @@
   const saveSettingsBtn = document.getElementById("saveSettingsBtn");
   const openSettingsBtn = document.getElementById("openSettingsBtn");
   
-  const appTitleDisplay = document.getElementById("appTitleDisplay");
+  const appTitleText = document.getElementById("appTitleText");
+  const versionTag = document.getElementById("versionTag");
   const versionText = document.getElementById("versionText");
 
   function loadSettings() {
     SPOTIFY_CLIENT_ID = localStorage.getItem("sj_client_id") || "";
     REDIRECT_URI = localStorage.getItem("sj_redirect_uri") || "";
     PARTY_PLAYLIST_ID = localStorage.getItem("sj_playlist_id") || "";
-    APP_TITLE = localStorage.getItem("sj_app_title") || "Social JukeBox";
+    APP_TITLE = localStorage.getItem("sj_app_title") || "Three Tails Tavern Bitchen Jukebox";
     
     SPEAKER_NAMES = localStorage.getItem("sj_speaker_names") || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
     
-    appTitleDisplay.textContent = `🎧 ${APP_TITLE}`;
+    appTitleText.textContent = APP_TITLE;
+    versionTag.textContent = VERSION_NUM;
     
     if (PARTY_PLAYLIST_ID.includes(":")) {
         PARTY_PLAYLIST_ID = PARTY_PLAYLIST_ID.split(":").pop();
@@ -629,7 +573,7 @@
     cfgAppTitle.value = APP_TITLE;
     cfgSpeakerNames.value = SPEAKER_NAMES;
     
-    versionText.textContent = `Version: ${VERSION_NUM}`;
+    versionText.textContent = `Build: ${VERSION_NUM}`;
 
     if (!SPOTIFY_CLIENT_ID || !REDIRECT_URI || !PARTY_PLAYLIST_ID) {
       settingsModal.style.display = "flex";
@@ -643,7 +587,7 @@
     localStorage.setItem("sj_redirect_uri", cfgRedirect.value.trim());
     localStorage.setItem("sj_playlist_id", cfgPlaylistId.value.trim());
     
-    const newTitle = cfgAppTitle.value.trim() || "Social JukeBox";
+    const newTitle = cfgAppTitle.value.trim() || "Three Tails Tavern Bitchen Jukebox";
     localStorage.setItem("sj_app_title", newTitle);
     
     const newSpeakers = cfgSpeakerNames.value.trim();
@@ -872,49 +816,6 @@
   }
 
   /**************************************************************
-   * DEVICE FINDER HELPER
-   **************************************************************/
-  async function findBestSpeakerDevice() {
-    const res = await fetchWithAuth("https://api.spotify.com/v1/me/player/devices");
-    const data = await res.json();
-    const devices = data.devices || [];
-
-    if (devices.length === 0) return null;
-
-    // Filter out phones/computers first to prioritize speakers
-    const speakers = devices.filter(d => !isPhoneOrComputer(d));
-    const nonSpeakers = devices.filter(d => isPhoneOrComputer(d));
-
-    const rawNames = SPEAKER_NAMES || "jukebox, basement, family, sonos, symfonisk, beam, arc, move, roam";
-    const allowedNames = rawNames.split(",").map(s => s.trim().toLowerCase()).filter(s => s.length > 0);
-    
-    // 1. PRIORITY: The device currently playing music
-    let target = speakers.find(d => d.is_active);
-    if (target) return target;
-
-    // 2. PRIORITY: Match Name in SPEAKER list
-    target = speakers.find(d => {
-        const n = d.name.toLowerCase();
-        return allowedNames.some(k => n.includes(k));
-    });
-    if (target) return target;
-    
-    // 3. PRIORITY: Any Inactive Speaker
-    if (speakers.length > 0) return speakers[0];
-
-    // 4. LAST RESORT: Phone/Computer
-    return nonSpeakers[0] || null;
-  }
-
-  function isPhoneOrComputer(d) {
-      const type = d.type.toLowerCase();
-      const name = d.name.toLowerCase();
-      if (type === 'smartphone' || type === 'computer' || type === 'tablet') return true;
-      if (name.includes("iphone") || name.includes("pixel") || name.includes("samsung") || name.includes("macbook")) return true;
-      return false;
-  }
-
-  /**************************************************************
    * SEARCH & ADD
    **************************************************************/
   const searchInput = document.getElementById("searchInput");
@@ -932,7 +833,7 @@
     searchResults.innerHTML = "";
 
     try {
-      const url = `https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`;
+      const url = `https://api.spotify.com/v1/search?type=track&q=${encodeURIComponent(q)}`;
       const res = await fetchWithAuth(url);
       const data = await res.json();
       const tracks = data.tracks?.items || [];
@@ -988,11 +889,9 @@
       return;
     }
 
-    // --- VISUAL POP EFFECT ---
     searchMessage.textContent = `Adding "${track.name}"...`;
     
     try {
-      // 1) Add to the party playlist
       await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
@@ -1001,7 +900,6 @@
         }
       );
       
-      // SUCCESS: Show visual confirmation immediately
       searchMessage.textContent = `🎉 Added "${track.name}"!`;
       searchMessage.classList.add("pop");
       searchInput.value = "";
@@ -1015,18 +913,17 @@
     } catch (err) {
       console.error(err);
       searchMessage.textContent = "Failed to add track. Check connection.";
-      return; // Stop here if failed
+      return; 
     }
     
-    // 3) REFRESH (Double tap to catch Spotify lag)
     await refreshPlaylistView();
     setTimeout(async () => {
          await refreshPlaylistView();
-         // SCROLL TO BOTTOM TO SHOW NEW TRACK
          const container = document.getElementById("playlistView");
          container.scrollTop = container.scrollHeight;
     }, 1500);
   }
+
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
@@ -1092,7 +989,6 @@
         const reorderRow = document.createElement("div");
         reorderRow.className = "track-reorder";
 
-        // --- NEW "TOP" BUTTON ---
         const topBtn = document.createElement("button");
         topBtn.className = "btn-top";
         topBtn.textContent = "TOP";
@@ -1103,7 +999,6 @@
              moveToTop(index, t.uri);
         };
         reorderRow.appendChild(topBtn);
-        // ------------------------
 
         const upBtn = document.createElement("button");
         upBtn.className = "btn-mini";
@@ -1147,13 +1042,13 @@
     }
   }
 
-  // --- UPDATED TOP FUNCTION: MOVES TO TOP + ADDS TO AUDIO QUEUE ---
+  // --- SAFE MOVE-TO-TOP FUNCTION ---
   async function moveToTop(position, trackUri) {
       if (lastSnapshotId === null) return;
-      playlistMessage.textContent = "Moving to top & queueing...";
+      playlistMessage.textContent = "Moving to top...";
       
       try {
-        // 1. Move visuals to top
+        // 1. Move visuals to top (CRITICAL - MUST SUCCEED)
         const res = await fetchWithAuth(
           `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
           {
@@ -1161,28 +1056,32 @@
             body: JSON.stringify({
               range_start: position,
               range_length: 1,
-              insert_before: 0, // 0 = TOP OF LIST
+              insert_before: 0, 
               snapshot_id: lastSnapshotId,
             }),
           }
         );
         const data = await res.json();
         lastSnapshotId = data.snapshot_id || lastSnapshotId;
-        
-        // 2. FORCE AUDIO QUEUE (Override Buffer)
-        // This ensures it plays next, regardless of playlist order buffering
-        await fetchWithAuth(
-            `https://api.spotify.com/v1/me/player/queue?uri=spotify:tr8{encodeURIComponent(trackUri)}`,
-            { method: "POST" }
-        );
-        
-        playlistMessage.textContent = "Queued next!";
-        await refreshPlaylistView();
-        
       } catch (err) {
         console.error("Move to top error:", err);
         playlistMessage.textContent = "Error moving track.";
+        return; 
       }
+      
+      // 2. Queue in Audio (NON-CRITICAL - CAN FAIL SILENTLY)
+      try {
+          await fetchWithAuth(
+            `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(trackUri)}`,
+            { method: "POST" }
+          );
+          playlistMessage.textContent = "Moved to top & Queued next!";
+      } catch (err) {
+          console.warn("Queue failed (Device sleeping or invisible):", err);
+          playlistMessage.textContent = "Moved to top (Queue skipped)";
+      }
+
+      await refreshPlaylistView();
   }
 
   async function moveTrack(position, delta) {
@@ -1308,7 +1207,7 @@
   async function refreshNowPlaying() {
     try {
       const res = await fetchWithAuth(
-        "https://api.spotify.com/v1/me/player"
+        "https://api.spotify.com/v1/me/player/currently-playing"
       );
       if (res.status === 204) {
         renderEmptyNowPlaying();
