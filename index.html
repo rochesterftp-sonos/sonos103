@@ -363,25 +363,13 @@
       box-shadow: 0 0 0 1px rgba(248,113,113,0.3);
     }
     .btn-remove:hover { background: rgba(248,113,113,0.35); transform: translateY(-1px); }
-    .btn-mini {
-      min-width: 36px;
-      min-height: 32px;
-      padding: 4px 8px;
-      font-size: .8rem;
-      box-shadow: none;
-      background: rgba(15,23,42,0.95);
-      color: var(--text-dim);
-      border-radius: 999px;
-      border: 1px solid rgba(55,65,81,0.9);
-    }
-    .btn-mini:hover { background: rgba(31,41,55,0.95); }
     
     /* TOP BUTTON STYLE */
     .btn-top {
-      min-width: 40px;
-      min-height: 32px;
+      min-width: 60px;
+      min-height: 36px;
       padding: 4px 10px;
-      font-size: .75rem;
+      font-size: .8rem;
       font-weight: 700;
       box-shadow: none;
       background: var(--top-btn-soft);
@@ -389,8 +377,10 @@
       border-radius: 999px;
       border: 1px solid rgba(139, 92, 246, 0.4);
       margin-right: 4px;
+      cursor: pointer;
     }
     .btn-top:hover { background: rgba(139, 92, 246, 0.3); }
+    .btn-top:disabled { opacity:0.3; cursor: default; }
 
     .msg {
       font-size: .82rem;
@@ -454,7 +444,7 @@
     <div class="title-block">
       <div class="title" id="appTitleContainer">
          <span id="appTitleText">Three Tails Tavern Bitchen Jukebox</span>
-         <span class="version-tag" id="versionTag">v2.5</span>
+         <span class="version-tag" id="versionTag">v2.6</span>
       </div>
       <div class="tagline">Queue songs on the host's Sonos.</div>
     </div>
@@ -528,7 +518,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.5"; 
+  const VERSION_NUM = "v2.6"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -916,12 +906,15 @@
       return; 
     }
     
+    // Wait slightly so Spotify backend processes the add
+    await new Promise(r => setTimeout(r, 400));
     await refreshPlaylistView();
+    
     setTimeout(async () => {
          await refreshPlaylistView();
          const container = document.getElementById("playlistView");
          container.scrollTop = container.scrollHeight;
-    }, 1500);
+    }, 1000);
   }
 
 
@@ -1000,26 +993,7 @@
         };
         reorderRow.appendChild(topBtn);
 
-        const upBtn = document.createElement("button");
-        upBtn.className = "btn-mini";
-        upBtn.textContent = "↑";
-        upBtn.disabled = index === 0;
-        upBtn.onclick = (e) => {
-          e.stopPropagation();
-          moveTrack(index, -1);
-        };
-
-        const downBtn = document.createElement("button");
-        downBtn.className = "btn-mini";
-        downBtn.textContent = "↓";
-        downBtn.disabled = index === tracks.length - 1;
-        downBtn.onclick = (e) => {
-          e.stopPropagation();
-          moveTrack(index, +1);
-        };
-
-        reorderRow.appendChild(upBtn);
-        reorderRow.appendChild(downBtn);
+        // REMOVED UP/DOWN ARROWS HERE
 
         const removeBtn = document.createElement("button");
         removeBtn.className = "btn-icon btn-remove";
@@ -1048,7 +1022,7 @@
       playlistMessage.textContent = "Moving to top...";
       
       try {
-        // 1. Move visuals to top (CRITICAL - MUST SUCCEED)
+        // 1. Move visuals to top
         const res = await fetchWithAuth(
           `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
           {
@@ -1069,7 +1043,7 @@
         return; 
       }
       
-      // 2. Queue in Audio (NON-CRITICAL - CAN FAIL SILENTLY)
+      // 2. Queue in Audio (Fail Safe)
       try {
           await fetchWithAuth(
             `https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(trackUri)}`,
@@ -1081,37 +1055,9 @@
           playlistMessage.textContent = "Moved to top (Queue skipped)";
       }
 
+      // Small delay to prevent jumpiness
+      await new Promise(r => setTimeout(r, 500));
       await refreshPlaylistView();
-  }
-
-  async function moveTrack(position, delta) {
-    if (lastSnapshotId === null) {
-      alert("Playlist state not ready yet.");
-      return;
-    }
-    const range_start = position;
-    const insert_before = position + delta + (delta > 0 ? 1 : 0);
-
-    try {
-      const res = await fetchWithAuth(
-        `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
-        {
-          method: "PUT",
-          body: JSON.stringify({
-            range_start,
-            range_length: 1,
-            insert_before,
-            snapshot_id: lastSnapshotId,
-          }),
-        }
-      );
-      const data = await res.json();
-      lastSnapshotId = data.snapshot_id || lastSnapshotId;
-      await refreshPlaylistView();
-    } catch (err) {
-      console.error("Reorder error:", err);
-      playlistMessage.textContent = "Error reordering tracks.";
-    }
   }
 
   async function removeTrackFromParty(position, uri, skipConfirm = false) {
