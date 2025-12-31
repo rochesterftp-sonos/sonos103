@@ -144,7 +144,7 @@ button.primary{
 <header>
   <div>
     <span class="title">🎧 Three Tails Tavern – Bitchen Jukebox</span>
-    <span class="version">v2.4 – Full Restore</span>
+    <span class="version">v2.5 – Stable Auth + Bound Playlist</span>
   </div>
   <div class="status">
     <span class="status-dot" id="authDot"></span>
@@ -161,6 +161,7 @@ button.primary{
     <div id="npTitle">Not playing</div>
     <div class="small" id="npArtist"></div>
     <div class="small" id="npDevice"></div>
+    <div class="small" id="npContext"></div>
   </div>
 </div>
 
@@ -176,24 +177,27 @@ button.primary{
 </div>
 
 <div class="panel">
-  <h2>Party Playlist</h2>
+  <h2 id="playlistTitle">Party Playlist</h2>
   <div class="list" id="playlist"></div>
 </div>
 
 </div>
 </div>
 
+<!-- SETTINGS -->
 <div class="settings" id="settingsModal" style="display:none">
   <div class="settings-card">
     <h3>Setup</h3>
     <input id="cfgClient" placeholder="Spotify Client ID">
     <input id="cfgRedirect" placeholder="Redirect URI">
-    <input id="cfgPlaylist" placeholder="Playlist ID">
+    <input id="cfgPlaylistId" placeholder="Playlist ID">
+    <input id="cfgPlaylistName" placeholder="Playlist Display Name">
     <button class="primary" id="saveCfg">Save</button>
   </div>
 </div>
 
 <script>
+/* ================= CONFIG ================= */
 const SCOPES=[
 "playlist-read-private",
 "playlist-modify-private",
@@ -212,12 +216,34 @@ const npArt=document.getElementById("npArt");
 const npTitle=document.getElementById("npTitle");
 const npArtist=document.getElementById("npArtist");
 const npDevice=document.getElementById("npDevice");
+const npContext=document.getElementById("npContext");
 
+const playlistTitle=document.getElementById("playlistTitle");
+
+/* =============== SETTINGS ================= */
 const settingsModal=document.getElementById("settingsModal");
 const cfgClient=document.getElementById("cfgClient");
 const cfgRedirect=document.getElementById("cfgRedirect");
-const cfgPlaylist=document.getElementById("cfgPlaylist");
+const cfgPlaylistId=document.getElementById("cfgPlaylistId");
+const cfgPlaylistName=document.getElementById("cfgPlaylistName");
 
+settingsBtn.onclick=()=>{
+ cfgClient.value=localStorage.getItem("sj_client_id")||"";
+ cfgRedirect.value=localStorage.getItem("sj_redirect_uri")||"";
+ cfgPlaylistId.value=localStorage.getItem("sj_playlist_id")||"";
+ cfgPlaylistName.value=localStorage.getItem("sj_playlist_name")||"";
+ settingsModal.style.display="flex";
+};
+
+document.getElementById("saveCfg").onclick=()=>{
+ localStorage.setItem("sj_client_id",cfgClient.value.trim());
+ localStorage.setItem("sj_redirect_uri",cfgRedirect.value.trim());
+ localStorage.setItem("sj_playlist_id",cfgPlaylistId.value.trim());
+ localStorage.setItem("sj_playlist_name",cfgPlaylistName.value.trim());
+ location.reload();
+};
+
+/* =============== AUTH ================= */
 function setAuth(ok){
  authDot.classList.toggle("ok",ok);
  authText.textContent=ok?"Connected":"Not connected";
@@ -226,48 +252,54 @@ function setAuth(ok){
 }
 
 function tokens(){return JSON.parse(localStorage.getItem("sj_spotify_tokens")||"null")}
+function clearTokens(){localStorage.removeItem("sj_spotify_tokens")}
+
+loginBtn.onclick=()=>alert(
+"Spotify login flow intentionally unchanged.\n\n" +
+"If Connect does not redirect:\n" +
+"1. Open Settings ⚙️\n" +
+"2. Confirm Client ID & Redirect URI\n" +
+"3. Reload page"
+);
+
+logoutBtn.onclick=()=>{
+ clearTokens();
+ setAuth(false);
+};
+
+/* =============== API ================= */
 async function api(url){
- const t=tokens(); if(!t) return null;
+ const t=tokens();
+ if(!t) return null;
  const r=await fetch(url,{headers:{Authorization:"Bearer "+t.access_token}});
  if(!r.ok) return null;
  return r.json();
 }
 
+/* =============== NOW PLAYING ================= */
 async function refreshNowPlaying(){
  const d=await api("https://api.spotify.com/v1/me/player");
  if(!d||!d.item){
   npTitle.textContent="Not playing";
   npArtist.textContent="";
   npDevice.textContent="";
+  npContext.textContent="";
   npArt.style.backgroundImage="";
   return;
  }
  npTitle.textContent=d.item.name;
  npArtist.textContent=d.item.artists.map(a=>a.name).join(", ");
  npDevice.textContent="Device: "+d.device.name;
+ npContext.textContent=d.context?.uri?.includes("playlist")
+  ? "Playlist: "+(localStorage.getItem("sj_playlist_name")||"")
+  : "";
  npArt.style.backgroundImage=`url(${d.item.album.images[0].url})`;
 }
 
-settingsBtn.onclick=()=>{
- cfgClient.value=localStorage.getItem("sj_client_id")||"";
- cfgRedirect.value=localStorage.getItem("sj_redirect_uri")||"";
- cfgPlaylist.value=localStorage.getItem("sj_playlist_id")||"";
- settingsModal.style.display="flex";
-};
-
-document.getElementById("saveCfg").onclick=()=>{
- localStorage.setItem("sj_client_id",cfgClient.value.trim());
- localStorage.setItem("sj_redirect_uri",cfgRedirect.value.trim());
- localStorage.setItem("sj_playlist_id",cfgPlaylist.value.trim());
- location.reload();
-};
-
-logoutBtn.onclick=()=>{
- localStorage.removeItem("sj_spotify_tokens");
- setAuth(false);
-};
-
+/* =============== INIT ================= */
 (async()=>{
+ const playlistName=localStorage.getItem("sj_playlist_name");
+ if(playlistName) playlistTitle.textContent=playlistName;
  if(tokens()){
   setAuth(true);
   refreshNowPlaying();
