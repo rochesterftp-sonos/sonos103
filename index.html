@@ -586,7 +586,7 @@
   /**************************************************************
    * CONFIG & STORAGE
    **************************************************************/
-  const VERSION_NUM = "v2.3 (No Force Btn + Top Btn)"; 
+  const VERSION_NUM = "v2.4 (Play Next Fix)"; 
   
   let SPOTIFY_CLIENT_ID = "";
   let REDIRECT_URI = "";
@@ -671,9 +671,6 @@
   let nowPlaying = null;
   let nowPlayingIntervalId = null;
   let lastTrackUri = null;
-  
-  // NOTE: Switch/Drift logic remains for auto-correction, 
-  // but button to trigger it manually is removed.
 
   /**************************************************************
    * AUTH + TOKEN HELPERS
@@ -995,7 +992,7 @@
     searchMessage.textContent = `Adding "${track.name}"...`;
     
     try {
-      // 1) CRITICAL: Add to the party playlist
+      // 1) Add to the party playlist
       await fetchWithAuth(
         `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
         {
@@ -1030,20 +1027,6 @@
          container.scrollTop = container.scrollHeight;
     }, 1500);
   }
-
-  // --- HELPER FOR BACKGROUND SWITCHING (Auto-Drift Only) ---
-  async function executeSwitch(deviceId, offsetUri) {
-     try {
-        const body = { context_uri: PLAYLIST_URI };
-        if (offsetUri) body.offset = { uri: offsetUri };
-        
-        await fetchWithAuth(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-            method: "PUT",
-            body: JSON.stringify(body)
-        });
-     } catch(e) { console.error("Switch failed", e); }
-  }
-
 
   /**************************************************************
    * PLAYLIST VIEW + REMOVE + REORDER
@@ -1113,12 +1096,11 @@
         const topBtn = document.createElement("button");
         topBtn.className = "btn-top";
         topBtn.textContent = "TOP";
-        topBtn.title = "Move to Top";
-        // Disable if already at top
+        topBtn.title = "Move to Top & Play Next";
         topBtn.disabled = index === 0;
         topBtn.onclick = (e) => {
              e.stopPropagation();
-             moveToTop(index);
+             moveToTop(index, t.uri);
         };
         reorderRow.appendChild(topBtn);
         // ------------------------
@@ -1165,9 +1147,13 @@
     }
   }
 
-  async function moveToTop(position) {
+  // --- UPDATED TOP FUNCTION: MOVES TO TOP + ADDS TO AUDIO QUEUE ---
+  async function moveToTop(position, trackUri) {
       if (lastSnapshotId === null) return;
+      playlistMessage.textContent = "Moving to top & queueing...";
+      
       try {
+        // 1. Move visuals to top
         const res = await fetchWithAuth(
           `https://api.spotify.com/v1/playlists/${PARTY_PLAYLIST_ID}/tracks`,
           {
@@ -1182,9 +1168,20 @@
         );
         const data = await res.json();
         lastSnapshotId = data.snapshot_id || lastSnapshotId;
+        
+        // 2. FORCE AUDIO QUEUE (Override Buffer)
+        // This ensures it plays next, regardless of playlist order buffering
+        await fetchWithAuth(
+            `https://api.spotify.com/v1/me/player/queue?uri=spotify:tr8{encodeURIComponent(trackUri)}`,
+            { method: "POST" }
+        );
+        
+        playlistMessage.textContent = "Queued next!";
         await refreshPlaylistView();
+        
       } catch (err) {
         console.error("Move to top error:", err);
+        playlistMessage.textContent = "Error moving track.";
       }
   }
 
