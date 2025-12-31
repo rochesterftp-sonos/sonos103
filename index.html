@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8">
 <title>Three Tails Tavern – Bitchen Jukebox</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
-:root {
+:root{
   --bg:#020617;
   --card:#02081a;
   --border:#1f2937;
@@ -67,14 +67,10 @@ button,input{
   padding:10px 16px;
   font-size:1rem;
 }
-button{
-  cursor:pointer;
-  font-weight:600;
-}
+button{cursor:pointer;font-weight:600}
 button.primary{
   background:linear-gradient(135deg,#22c55e,#16a34a);
-  color:#022c22;
-  border:none;
+  color:#022c22;border:none;
 }
 .layout{
   display:flex;
@@ -92,8 +88,6 @@ button.primary{
   padding:12px;
   min-height:0;
 }
-.panel h2{margin:0;font-size:1.1rem}
-.search-row{display:flex;gap:8px;margin-top:8px}
 .list{
   margin-top:10px;
   flex:1;
@@ -114,7 +108,33 @@ button.primary{
 .track-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .track-sub{font-size:.8rem;color:var(--text-dim)}
 .track-actions{display:flex;gap:6px}
-.small{font-size:.8rem;color:var(--text-dim);margin-top:6px}
+.now-playing{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  padding:10px;
+  border:1px solid var(--border);
+  border-radius:18px;
+  background:#02081a;
+}
+.np-art{
+  width:72px;height:72px;border-radius:14px;
+  background:#111;background-size:cover;background-position:center;
+}
+.small{font-size:.8rem;color:var(--text-dim)}
+.settings{
+  position:fixed;inset:0;
+  background:rgba(2,6,23,.95);
+  display:flex;align-items:center;justify-content:center;
+}
+.settings-card{
+  background:#02081a;
+  padding:20px;
+  border-radius:18px;
+  border:1px solid var(--border);
+  width:100%;max-width:420px;
+  display:flex;flex-direction:column;gap:10px;
+}
 </style>
 </head>
 
@@ -124,39 +144,56 @@ button.primary{
 <header>
   <div>
     <span class="title">🎧 Three Tails Tavern – Bitchen Jukebox</span>
-    <span class="version">v2.3 – Playlist-First Stable</span>
+    <span class="version">v2.4 – Full Restore</span>
   </div>
   <div class="status">
     <span class="status-dot" id="authDot"></span>
     <span id="authText">Not connected</span>
+    <button id="settingsBtn">⚙️</button>
     <button id="loginBtn" class="primary">Connect</button>
     <button id="logoutBtn" style="display:none">Logout</button>
   </div>
 </header>
 
+<div class="now-playing">
+  <div class="np-art" id="npArt"></div>
+  <div>
+    <div id="npTitle">Not playing</div>
+    <div class="small" id="npArtist"></div>
+    <div class="small" id="npDevice"></div>
+  </div>
+</div>
+
 <div class="layout">
 
 <div class="panel">
-  <h2>Search Music</h2>
-  <div class="search-row">
-    <input id="searchInput" placeholder="Search Spotify…" />
+  <h2>Search</h2>
+  <div style="display:flex;gap:8px">
+    <input id="searchInput" placeholder="Search Spotify">
     <button id="searchBtn">Search</button>
   </div>
   <div class="list" id="searchResults"></div>
-  <div class="small" id="searchMsg"></div>
 </div>
 
 <div class="panel">
   <h2>Party Playlist</h2>
   <div class="list" id="playlist"></div>
-  <div class="small" id="playlistMsg"></div>
 </div>
 
 </div>
+</div>
+
+<div class="settings" id="settingsModal" style="display:none">
+  <div class="settings-card">
+    <h3>Setup</h3>
+    <input id="cfgClient" placeholder="Spotify Client ID">
+    <input id="cfgRedirect" placeholder="Redirect URI">
+    <input id="cfgPlaylist" placeholder="Playlist ID">
+    <button class="primary" id="saveCfg">Save</button>
+  </div>
 </div>
 
 <script>
-const VERSION="v2.3 – Playlist-First Stable";
 const SCOPES=[
 "playlist-read-private",
 "playlist-modify-private",
@@ -165,14 +202,21 @@ const SCOPES=[
 "user-read-currently-playing"
 ];
 
-const CLIENT_ID=localStorage.getItem("sj_client_id");
-const REDIRECT_URI=localStorage.getItem("sj_redirect_uri");
-const PLAYLIST_ID=localStorage.getItem("sj_playlist_id");
-
 const authDot=document.getElementById("authDot");
 const authText=document.getElementById("authText");
 const loginBtn=document.getElementById("loginBtn");
 const logoutBtn=document.getElementById("logoutBtn");
+const settingsBtn=document.getElementById("settingsBtn");
+
+const npArt=document.getElementById("npArt");
+const npTitle=document.getElementById("npTitle");
+const npArtist=document.getElementById("npArtist");
+const npDevice=document.getElementById("npDevice");
+
+const settingsModal=document.getElementById("settingsModal");
+const cfgClient=document.getElementById("cfgClient");
+const cfgRedirect=document.getElementById("cfgRedirect");
+const cfgPlaylist=document.getElementById("cfgPlaylist");
 
 function setAuth(ok){
  authDot.classList.toggle("ok",ok);
@@ -182,114 +226,52 @@ function setAuth(ok){
 }
 
 function tokens(){return JSON.parse(localStorage.getItem("sj_spotify_tokens")||"null")}
-
-async function api(url,opt={}){
- const t=tokens();
- if(!t) throw "Not authed";
- opt.headers=Object.assign(opt.headers||{},{
-  Authorization:"Bearer "+t.access_token,
-  "Content-Type":"application/json"
- });
- const r=await fetch(url,opt);
- if(!r.ok) throw await r.text();
+async function api(url){
+ const t=tokens(); if(!t) return null;
+ const r=await fetch(url,{headers:{Authorization:"Bearer "+t.access_token}});
+ if(!r.ok) return null;
  return r.json();
 }
 
-/* ===== SEARCH ===== */
-const searchBtn=document.getElementById("searchBtn");
-const searchResults=document.getElementById("searchResults");
-const searchMsg=document.getElementById("searchMsg");
+async function refreshNowPlaying(){
+ const d=await api("https://api.spotify.com/v1/me/player");
+ if(!d||!d.item){
+  npTitle.textContent="Not playing";
+  npArtist.textContent="";
+  npDevice.textContent="";
+  npArt.style.backgroundImage="";
+  return;
+ }
+ npTitle.textContent=d.item.name;
+ npArtist.textContent=d.item.artists.map(a=>a.name).join(", ");
+ npDevice.textContent="Device: "+d.device.name;
+ npArt.style.backgroundImage=`url(${d.item.album.images[0].url})`;
+}
 
-searchBtn.onclick=async()=>{
- const q=document.getElementById("searchInput").value.trim();
- if(!q)return;
- searchMsg.textContent="Searching…";
- searchResults.innerHTML="";
- const d=await api(`https://api.spotify.com/v1/search?type=track&limit=10&q=${encodeURIComponent(q)}`);
- d.tracks.items.forEach(t=>{
-  const row=document.createElement("div");
-  row.className="track";
-  row.innerHTML=`
-   <div class="track-main">
-    <div class="track-title">${t.name}</div>
-    <div class="track-sub">${t.artists.map(a=>a.name).join(", ")}</div>
-   </div>
-   <div class="track-actions">
-    <button class="primary">➕</button>
-   </div>`;
-  row.querySelector("button").onclick=()=>addTrack(t.uri);
-  searchResults.appendChild(row);
- });
- searchMsg.textContent="Tap ➕ to add";
+settingsBtn.onclick=()=>{
+ cfgClient.value=localStorage.getItem("sj_client_id")||"";
+ cfgRedirect.value=localStorage.getItem("sj_redirect_uri")||"";
+ cfgPlaylist.value=localStorage.getItem("sj_playlist_id")||"";
+ settingsModal.style.display="flex";
 };
 
-/* ===== PLAYLIST ===== */
-const playlistEl=document.getElementById("playlist");
-const playlistMsg=document.getElementById("playlistMsg");
-let snapshot=null;
+document.getElementById("saveCfg").onclick=()=>{
+ localStorage.setItem("sj_client_id",cfgClient.value.trim());
+ localStorage.setItem("sj_redirect_uri",cfgRedirect.value.trim());
+ localStorage.setItem("sj_playlist_id",cfgPlaylist.value.trim());
+ location.reload();
+};
 
-async function loadPlaylist(){
- playlistEl.innerHTML="";
- const d=await api(`https://api.spotify.com/v1/playlists/${PLAYLIST_ID}`);
- snapshot=d.snapshot_id;
- playlistMsg.textContent=`${d.tracks.items.length} tracks`;
- d.tracks.items.forEach((it,i)=>{
-  const t=it.track;
-  const row=document.createElement("div");
-  row.className="track";
-  row.innerHTML=`
-   <div class="track-main">
-    <div class="track-title">${i+1}. ${t.name}</div>
-    <div class="track-sub">${t.artists.map(a=>a.name).join(", ")}</div>
-   </div>
-   <div class="track-actions">
-    <button ${i<=1?"disabled":""}>▶ Next</button>
-    <button>🗑</button>
-   </div>`;
-  row.children[1].children[0].onclick=()=>moveTrack(i,1);
-  row.children[1].children[1].onclick=()=>removeTrack(i,t.uri);
-  playlistEl.appendChild(row);
- });
-}
+logoutBtn.onclick=()=>{
+ localStorage.removeItem("sj_spotify_tokens");
+ setAuth(false);
+};
 
-async function addTrack(uri){
- await api(`https://api.spotify.com/v1/playlists/${PLAYLIST_ID}/tracks`,{
-  method:"POST",body:JSON.stringify({uris:[uri]})
- });
- await loadPlaylist();
-}
-
-async function moveTrack(pos,target){
- await api(`https://api.spotify.com/v1/playlists/${PLAYLIST_ID}/tracks`,{
-  method:"PUT",
-  body:JSON.stringify({
-   range_start:pos,
-   insert_before:target,
-   range_length:1,
-   snapshot_id:snapshot
-  })
- });
- await loadPlaylist();
-}
-
-async function removeTrack(pos,uri){
- if(!confirm("Remove this song?"))return;
- await api(`https://api.spotify.com/v1/playlists/${PLAYLIST_ID}/tracks`,{
-  method:"DELETE",
-  body:JSON.stringify({
-   tracks:[{uri,positions:[pos]}],
-   snapshot_id:snapshot
-  })
- });
- await loadPlaylist();
-}
-
-/* ===== INIT ===== */
 (async()=>{
- const t=tokens();
- if(t){
+ if(tokens()){
   setAuth(true);
-  await loadPlaylist();
+  refreshNowPlaying();
+  setInterval(refreshNowPlaying,15000);
  }
 })();
 </script>
