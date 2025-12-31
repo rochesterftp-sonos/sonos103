@@ -2,99 +2,113 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Three Tails Tavern – Bitchen Jukebox</title>
+<title>Three Tails Tavern Bitchen Jukebox</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
 :root{
   --bg:#020617;
-  --card:#02081a;
-  --border:#1f2937;
+  --panel:#02081a;
   --accent:#22c55e;
-  --accent-soft:rgba(34,197,94,.2);
-  --danger:#f97373;
   --text:#e5e7eb;
-  --text-dim:#9ca3af;
+  --dim:#9ca3af;
   --radius:18px;
-  --font:system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 *{box-sizing:border-box}
 body{
   margin:0;
-  background:radial-gradient(circle at top left,#0b1220,#020617 60%);
-  font-family:var(--font);
+  background:radial-gradient(circle at top left,#0b1220,#020617 70%);
   color:var(--text);
-  height:100vh;
+  font-family:system-ui,-apple-system,Segoe UI,sans-serif;
 }
 .app{
-  max-width:1400px;
+  max-width:1100px;
   margin:auto;
   padding:14px;
-  height:100%;
   display:flex;
   flex-direction:column;
-  gap:12px;
+  gap:14px;
 }
 header{
   display:flex;
   justify-content:space-between;
-  align-items:flex-end;
-}
-.title{
-  font-size:1.6rem;
-  font-weight:700;
-}
-.version{
-  font-size:.75rem;
-  color:var(--text-dim);
-  margin-left:6px;
-}
-.status{
-  display:flex;
-  gap:8px;
   align-items:center;
+  gap:10px;
 }
-.status-dot{
-  width:10px;height:10px;border-radius:50%;
-  background:#ef4444;
+h1{
+  font-size:1.5rem;
+  margin:0;
 }
-.status-dot.ok{background:#22c55e}
-button,input{
+small{
+  color:var(--dim);
+  font-size:.8rem;
+}
+button{
   border-radius:999px;
-  border:1px solid var(--border);
-  background:#0f172a;
+  border:1px solid rgba(255,255,255,.2);
+  background:#111827;
   color:var(--text);
   padding:10px 16px;
   font-size:1rem;
+  cursor:pointer;
 }
-button{cursor:pointer;font-weight:600}
 button.primary{
   background:linear-gradient(135deg,#22c55e,#16a34a);
-  color:#022c22;border:none;
+  color:#022c22;
+  border:none;
+}
+button.ghost{
+  background:transparent;
+}
+.panel{
+  background:radial-gradient(circle at top left,rgba(34,197,94,.12),rgba(6,10,25,.98));
+  border-radius:var(--radius);
+  border:1px solid rgba(255,255,255,.15);
+  padding:14px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.now-playing{
+  display:flex;
+  gap:14px;
+  align-items:center;
+}
+.art{
+  width:80px;
+  height:80px;
+  border-radius:14px;
+  background:#020617 center/cover no-repeat;
+}
+.meta{
+  flex:1;
+}
+.meta b{
+  display:block;
+  font-size:1.05rem;
+}
+.meta span{
+  color:var(--dim);
+  font-size:.9rem;
 }
 .layout{
   display:flex;
-  gap:12px;
-  flex:1;
-  min-height:0;
+  gap:14px;
+  flex-wrap:wrap;
 }
-.panel{
-  flex:1;
+.col{
+  flex:1 1 480px;
   display:flex;
   flex-direction:column;
-  background:#02081a;
-  border-radius:var(--radius);
-  border:1px solid var(--border);
-  padding:12px;
-  min-height:0;
+  gap:10px;
 }
-.list{
-  margin-top:10px;
-  flex:1;
-  overflow-y:auto;
-  border:1px solid var(--border);
-  border-radius:14px;
-  padding:6px;
+input{
+  padding:12px;
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,.2);
+  background:#020617;
+  color:var(--text);
+  font-size:1rem;
 }
 .track{
   display:flex;
@@ -103,38 +117,17 @@ button.primary{
   padding:8px;
   border-radius:12px;
 }
-.track:hover{background:#1f2937}
-.track-main{flex:1;overflow:hidden}
-.track-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.track-sub{font-size:.8rem;color:var(--text-dim)}
-.track-actions{display:flex;gap:6px}
-.now-playing{
-  display:flex;
-  gap:12px;
-  align-items:center;
-  padding:10px;
-  border:1px solid var(--border);
-  border-radius:18px;
-  background:#02081a;
-}
-.np-art{
-  width:72px;height:72px;border-radius:14px;
-  background:#111;background-size:cover;background-position:center;
-}
-.small{font-size:.8rem;color:var(--text-dim)}
+.track:hover{background:rgba(255,255,255,.05)}
+.msg{color:var(--dim);font-size:.85rem}
 .settings{
-  position:fixed;inset:0;
-  background:rgba(2,6,23,.95);
-  display:flex;align-items:center;justify-content:center;
+  position:fixed;
+  inset:0;
+  background:rgba(2,6,23,.97);
+  display:none;
+  align-items:center;
+  justify-content:center;
 }
-.settings-card{
-  background:#02081a;
-  padding:20px;
-  border-radius:18px;
-  border:1px solid var(--border);
-  width:100%;max-width:420px;
-  display:flex;flex-direction:column;gap:10px;
-}
+.settings .panel{max-width:420px;width:100%}
 </style>
 </head>
 
@@ -143,169 +136,200 @@ button.primary{
 
 <header>
   <div>
-    <span class="title">🎧 Three Tails Tavern – Bitchen Jukebox</span>
-    <span class="version">v2.5 – Stable Auth + Bound Playlist</span>
+    <h1>🎧 Three Tails Tavern Bitchen Jukebox</h1>
+    <small id="version">v3.0 – playlist anchored</small>
   </div>
-  <div class="status">
-    <span class="status-dot" id="authDot"></span>
-    <span id="authText">Not connected</span>
-    <button id="settingsBtn">⚙️</button>
+  <div>
+    <button id="settingsBtn" class="ghost">⚙️</button>
     <button id="loginBtn" class="primary">Connect</button>
-    <button id="logoutBtn" style="display:none">Logout</button>
+    <button id="logoutBtn" class="ghost" style="display:none">Log out</button>
   </div>
 </header>
 
-<div class="now-playing">
-  <div class="np-art" id="npArt"></div>
-  <div>
-    <div id="npTitle">Not playing</div>
-    <div class="small" id="npArtist"></div>
-    <div class="small" id="npDevice"></div>
-    <div class="small" id="npContext"></div>
+<section class="panel now-playing">
+  <div class="art" id="npArt"></div>
+  <div class="meta">
+    <b id="npTitle">Not playing</b>
+    <span id="npArtist">Waiting for Spotify…</span><br>
+    <span id="npDevice"></span>
   </div>
-</div>
+</section>
 
 <div class="layout">
-
-<div class="panel">
-  <h2>Search</h2>
-  <div style="display:flex;gap:8px">
-    <input id="searchInput" placeholder="Search Spotify">
-    <button id="searchBtn">Search</button>
+  <div class="col panel">
+    <b>Search music</b>
+    <input id="searchInput" placeholder="Search Spotify…">
+    <div id="searchResults"></div>
+    <div class="msg" id="searchMsg"></div>
   </div>
-  <div class="list" id="searchResults"></div>
+
+  <div class="col panel">
+    <b>Party playlist</b>
+    <div id="playlist"></div>
+    <div class="msg" id="playlistMsg"></div>
+  </div>
 </div>
 
-<div class="panel">
-  <h2 id="playlistTitle">Party Playlist</h2>
-  <div class="list" id="playlist"></div>
-</div>
-
-</div>
 </div>
 
 <!-- SETTINGS -->
-<div class="settings" id="settingsModal" style="display:none">
-  <div class="settings-card">
-    <h3>Setup</h3>
-    <input id="cfgClient" placeholder="Spotify Client ID">
-    <input id="cfgRedirect" placeholder="Redirect URI">
-    <input id="cfgPlaylistId" placeholder="Playlist ID">
-    <input id="cfgPlaylistName" placeholder="Playlist Display Name">
-    <button class="primary" id="saveCfg">Save</button>
+<div class="settings" id="settings">
+  <div class="panel">
+    <b>Setup</b>
+    <input id="clientId" placeholder="Spotify Client ID">
+    <input id="redirectUri" placeholder="Redirect URI">
+    <input id="playlistId" placeholder="Playlist ID">
+    <button class="primary" id="saveSettings">Save</button>
   </div>
 </div>
 
 <script>
 /* ================= CONFIG ================= */
+const VERSION="v3.0 – playlist anchored";
 const SCOPES=[
-"playlist-read-private",
-"playlist-modify-private",
-"playlist-modify-public",
-"user-read-playback-state",
-"user-read-currently-playing"
+ "playlist-read-private",
+ "playlist-modify-private",
+ "playlist-modify-public",
+ "user-read-playback-state",
+ "user-read-currently-playing",
+ "user-modify-playback-state"
 ];
 
-const authDot=document.getElementById("authDot");
-const authText=document.getElementById("authText");
-const loginBtn=document.getElementById("loginBtn");
-const logoutBtn=document.getElementById("logoutBtn");
-const settingsBtn=document.getElementById("settingsBtn");
+let tokens=null,lastTrackUri=null;
 
-const npArt=document.getElementById("npArt");
-const npTitle=document.getElementById("npTitle");
-const npArtist=document.getElementById("npArtist");
-const npDevice=document.getElementById("npDevice");
-const npContext=document.getElementById("npContext");
+/* ================= HELPERS ================= */
+const $=id=>document.getElementById(id);
+const store=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const load=k=>JSON.parse(localStorage.getItem(k)||"null");
 
-const playlistTitle=document.getElementById("playlistTitle");
-
-/* =============== SETTINGS ================= */
-const settingsModal=document.getElementById("settingsModal");
-const cfgClient=document.getElementById("cfgClient");
-const cfgRedirect=document.getElementById("cfgRedirect");
-const cfgPlaylistId=document.getElementById("cfgPlaylistId");
-const cfgPlaylistName=document.getElementById("cfgPlaylistName");
-
-settingsBtn.onclick=()=>{
- cfgClient.value=localStorage.getItem("sj_client_id")||"";
- cfgRedirect.value=localStorage.getItem("sj_redirect_uri")||"";
- cfgPlaylistId.value=localStorage.getItem("sj_playlist_id")||"";
- cfgPlaylistName.value=localStorage.getItem("sj_playlist_name")||"";
- settingsModal.style.display="flex";
-};
-
-document.getElementById("saveCfg").onclick=()=>{
- localStorage.setItem("sj_client_id",cfgClient.value.trim());
- localStorage.setItem("sj_redirect_uri",cfgRedirect.value.trim());
- localStorage.setItem("sj_playlist_id",cfgPlaylistId.value.trim());
- localStorage.setItem("sj_playlist_name",cfgPlaylistName.value.trim());
- location.reload();
-};
-
-/* =============== AUTH ================= */
-function setAuth(ok){
- authDot.classList.toggle("ok",ok);
- authText.textContent=ok?"Connected":"Not connected";
- loginBtn.style.display=ok?"none":"inline";
- logoutBtn.style.display=ok?"inline":"none";
+async function api(url,opt={}){
+  opt.headers=opt.headers||{};
+  opt.headers.Authorization="Bearer "+tokens.access_token;
+  if(opt.body) opt.headers["Content-Type"]="application/json";
+  let r=await fetch(url,opt);
+  if(r.status===401) throw "auth";
+  return r.status===204?null:r.json();
 }
 
-function tokens(){return JSON.parse(localStorage.getItem("sj_spotify_tokens")||"null")}
-function clearTokens(){localStorage.removeItem("sj_spotify_tokens")}
+/* ================= AUTH ================= */
+async function login(){
+  const cid=localStorage.getItem("cid");
+  const red=localStorage.getItem("redir");
+  if(!cid||!red){settings.style.display="flex";return;}
+  const v=crypto.randomUUID();
+  const c=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v));
+  const cc=btoa(String.fromCharCode(...new Uint8Array(c))).replace(/\+/g,"-").replace(/\//g,"_").replace(/=/g,"");
+  localStorage.setItem("verifier",v);
+  location=`https://accounts.spotify.com/authorize?client_id=${cid}&response_type=code&redirect_uri=${encodeURIComponent(red)}&scope=${SCOPES.join("%20")}&code_challenge_method=S256&code_challenge=${cc}`;
+}
 
-loginBtn.onclick=()=>alert(
-"Spotify login flow intentionally unchanged.\n\n" +
-"If Connect does not redirect:\n" +
-"1. Open Settings ⚙️\n" +
-"2. Confirm Client ID & Redirect URI\n" +
-"3. Reload page"
-);
+async function handleAuth(){
+  const p=new URLSearchParams(location.search);
+  if(!p.get("code"))return;
+  const body=new URLSearchParams({
+    grant_type:"authorization_code",
+    code:p.get("code"),
+    redirect_uri:localStorage.getItem("redir"),
+    client_id:localStorage.getItem("cid"),
+    code_verifier:localStorage.getItem("verifier")
+  });
+  const r=await fetch("https://accounts.spotify.com/api/token",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body});
+  tokens=await r.json(); store("tok",tokens);
+  history.replaceState({},document.title,location.pathname);
+  start();
+}
 
-logoutBtn.onclick=()=>{
- clearTokens();
- setAuth(false);
+/* ================= UI ================= */
+function setConnected(on){
+  loginBtn.style.display=on?"none":"inline";
+  logoutBtn.style.display=on?"inline":"none";
+}
+
+/* ================= CORE ================= */
+async function refreshNow(){
+  const d=await api("https://api.spotify.com/v1/me/player");
+  if(!d||!d.item){npTitle.textContent="Not playing";return;}
+  npTitle.textContent=d.item.name;
+  npArtist.textContent=d.item.artists.map(a=>a.name).join(", ");
+  npDevice.textContent="Device: "+d.device.name;
+  if(d.item.album.images[0]) npArt.style.backgroundImage=`url(${d.item.album.images[0].url})`;
+
+  if(lastTrackUri && lastTrackUri!==d.item.uri){
+    await api(`https://api.spotify.com/v1/playlists/${localStorage.getItem("pid")}/tracks`,{
+      method:"DELETE",
+      body:JSON.stringify({tracks:[{uri:lastTrackUri}]})
+    });
+  }
+  lastTrackUri=d.item.uri;
+}
+
+async function refreshPlaylist(){
+  const p=await api(`https://api.spotify.com/v1/playlists/${localStorage.getItem("pid")}`);
+  playlist.innerHTML="";
+  p.tracks.items.forEach((i,idx)=>{
+    const t=i.track;
+    const row=document.createElement("div");
+    row.className="track";
+    row.innerHTML=`<span>${idx+1}. ${t.name}</span>
+      <button onclick="moveNext(${idx})">⬆ Next</button>`;
+    playlist.appendChild(row);
+  });
+}
+
+async function moveNext(i){
+  await api(`https://api.spotify.com/v1/playlists/${localStorage.getItem("pid")}/tracks`,{
+    method:"PUT",
+    body:JSON.stringify({range_start:i,insert_before:1})
+  });
+  refreshPlaylist();
+}
+
+/* ================= SEARCH ================= */
+async function search(){
+  const q=searchInput.value.trim(); if(!q)return;
+  const r=await api(`https://api.spotify.com/v1/search?type=track&limit=6&q=${encodeURIComponent(q)}`);
+  searchResults.innerHTML="";
+  r.tracks.items.forEach(t=>{
+    const d=document.createElement("div");
+    d.className="track";
+    d.innerHTML=`<span>${t.name}</span><button onclick="add('${t.uri}')">➕</button>`;
+    searchResults.appendChild(d);
+  });
+}
+
+async function add(uri){
+  await api(`https://api.spotify.com/v1/playlists/${localStorage.getItem("pid")}/tracks`,{
+    method:"POST",
+    body:JSON.stringify({uris:[uri]})
+  });
+  // anchor playback if drifted
+  await api("https://api.spotify.com/v1/me/player/play",{method:"PUT",body:JSON.stringify({context_uri:`spotify:playlist:${localStorage.getItem("pid")}`})});
+  refreshPlaylist();
+}
+
+/* ================= INIT ================= */
+async function start(){
+  tokens=load("tok");
+  if(!tokens){setConnected(false);return;}
+  setConnected(true);
+  await refreshPlaylist();
+  await refreshNow();
+  setInterval(refreshNow,15000);
+}
+
+loginBtn.onclick=login;
+logoutBtn.onclick=()=>{localStorage.clear();location.reload();}
+searchInput.onkeydown=e=>e.key==="Enter"&&search();
+settingsBtn.onclick=()=>settings.style.display="flex";
+saveSettings.onclick=()=>{
+  localStorage.setItem("cid",clientId.value);
+  localStorage.setItem("redir",redirectUri.value);
+  localStorage.setItem("pid",playlistId.value);
+  settings.style.display="none";
 };
 
-/* =============== API ================= */
-async function api(url){
- const t=tokens();
- if(!t) return null;
- const r=await fetch(url,{headers:{Authorization:"Bearer "+t.access_token}});
- if(!r.ok) return null;
- return r.json();
-}
-
-/* =============== NOW PLAYING ================= */
-async function refreshNowPlaying(){
- const d=await api("https://api.spotify.com/v1/me/player");
- if(!d||!d.item){
-  npTitle.textContent="Not playing";
-  npArtist.textContent="";
-  npDevice.textContent="";
-  npContext.textContent="";
-  npArt.style.backgroundImage="";
-  return;
- }
- npTitle.textContent=d.item.name;
- npArtist.textContent=d.item.artists.map(a=>a.name).join(", ");
- npDevice.textContent="Device: "+d.device.name;
- npContext.textContent=d.context?.uri?.includes("playlist")
-  ? "Playlist: "+(localStorage.getItem("sj_playlist_name")||"")
-  : "";
- npArt.style.backgroundImage=`url(${d.item.album.images[0].url})`;
-}
-
-/* =============== INIT ================= */
-(async()=>{
- const playlistName=localStorage.getItem("sj_playlist_name");
- if(playlistName) playlistTitle.textContent=playlistName;
- if(tokens()){
-  setAuth(true);
-  refreshNowPlaying();
-  setInterval(refreshNowPlaying,15000);
- }
-})();
+version.textContent=VERSION;
+handleAuth(); start();
 </script>
 </body>
 </html>
